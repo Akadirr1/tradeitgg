@@ -1,0 +1,404 @@
+/* ============================================================
+   styles.css — Injected into tradeit.gg pages
+   TradeIt Tracker: Live Panel + Toasts
+   ============================================================ */
+
+/* ── CSS Custom Properties ─────────────────────────────────── */
+:root {
+  --tt-bg:          #0d1117;
+  --tt-surface:     #161b22;
+  --tt-border:      #30363d;
+  --tt-accent:      #e8b84b;
+  --tt-accent2:     #ff6b35;
+  --tt-text:        #e6edf3;
+  --tt-muted:       #8b949e;
+  --tt-green:       #3fb950;
+  --tt-red:         #f85149;
+  --tt-watchlist:   rgba(232, 184, 75, 0.12);
+  --tt-radius:      10px;
+  --tt-shadow:      0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.4);
+  --tt-font:        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Toast Container ─────────────────────────────────────── */
+#tt-toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2147483646;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  max-width: 340px;
+  font-family: var(--tt-font);
+}
+
+/* ── Single Toast ─────────────────────────────────────────── */
+.tt-toast {
+  pointer-events: all;
+  background: var(--tt-surface);
+  border: 1px solid var(--tt-border);
+  border-radius: var(--tt-radius);
+  padding: 14px 16px;
+  box-shadow: var(--tt-shadow);
+  transform: translateX(110%);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.tt-toast::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--tt-muted);
+  border-radius: var(--tt-radius) 0 0 var(--tt-radius);
+}
+
+.tt-toast--normal::before  { background: var(--tt-green); }
+.tt-toast--watchlist::before { background: linear-gradient(180deg, var(--tt-accent), var(--tt-accent2)); }
+
+.tt-toast--watchlist {
+  border-color: rgba(232, 184, 75, 0.5);
+  background: linear-gradient(135deg, rgba(232,184,75,0.08) 0%, var(--tt-surface) 60%);
+  box-shadow: var(--tt-shadow), 0 0 20px rgba(232,184,75,0.15);
+}
+
+.tt-toast--visible {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.tt-toast--exit {
+  transform: translateX(110%);
+  opacity: 0;
+}
+
+.tt-toast-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.tt-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--tt-green);
+  border: 1px solid rgba(63,185,80,0.3);
+  text-transform: uppercase;
+  font-family: var(--tt-font);
+}
+
+.tt-badge--new {
+  background: rgba(63,185,80,0.12);
+  color: var(--tt-green);
+  border-color: rgba(63,185,80,0.3);
+}
+
+.tt-toast--watchlist .tt-badge {
+  background: rgba(232,184,75,0.15);
+  color: var(--tt-accent);
+  border-color: rgba(232,184,75,0.35);
+}
+
+.tt-toast-close {
+  background: none;
+  border: none;
+  color: var(--tt-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+  font-family: var(--tt-font);
+}
+.tt-toast-close:hover { color: var(--tt-text); }
+
+.tt-toast-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tt-text);
+  margin-bottom: 10px;
+  line-height: 1.4;
+  font-family: var(--tt-font);
+}
+
+.tt-toast-details {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.tt-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tt-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--tt-muted);
+  font-family: var(--tt-font);
+  font-weight: 500;
+}
+
+.tt-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tt-accent);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace, var(--tt-font);
+}
+
+.tt-toast-link {
+  display: block;
+  font-size: 11px;
+  color: var(--tt-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+  font-family: var(--tt-font);
+}
+.tt-toast-link:hover { color: var(--tt-accent); }
+
+/* ── Live Panel ──────────────────────────────────────────── */
+#tt-live-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483645;
+  width: 660px;
+  max-height: 420px;
+  background: var(--tt-bg);
+  border: 1px solid var(--tt-border);
+  border-radius: var(--tt-radius);
+  box-shadow: var(--tt-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--tt-font);
+  transition: max-height 0.3s ease;
+  resize: horizontal;
+}
+
+#tt-live-panel.tt-panel--minimized {
+  max-height: 44px;
+}
+
+.tt-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--tt-surface);
+  border-bottom: 1px solid var(--tt-border);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.tt-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tt-text);
+  letter-spacing: 0.02em;
+}
+
+.tt-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tt-green);
+  box-shadow: 0 0 6px var(--tt-green);
+  animation: tt-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tt-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--tt-green); }
+  50%       { opacity: 0.6; box-shadow: 0 0 12px var(--tt-green); }
+}
+
+.tt-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tt-panel-count {
+  font-size: 11px;
+  color: var(--tt-muted);
+  font-family: 'JetBrains Mono', monospace, var(--tt-font);
+}
+
+.tt-panel-btn {
+  background: none;
+  border: 1px solid var(--tt-border);
+  color: var(--tt-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: all 0.15s;
+  line-height: 1;
+  font-family: var(--tt-font);
+}
+.tt-panel-btn:hover {
+  background: var(--tt-border);
+  color: var(--tt-text);
+}
+
+.tt-panel-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tt-filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(22, 27, 34, 0.6);
+  border-bottom: 1px solid var(--tt-border);
+  flex-shrink: 0;
+}
+
+.tt-input {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--tt-border);
+  border-radius: 6px;
+  color: var(--tt-text);
+  font-size: 11px;
+  padding: 5px 10px;
+  outline: none;
+  font-family: var(--tt-font);
+  transition: border-color 0.15s;
+}
+.tt-input::placeholder { color: var(--tt-muted); }
+.tt-input:focus { border-color: var(--tt-accent); }
+
+.tt-table-wrap {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.tt-table-wrap::-webkit-scrollbar { width: 5px; }
+.tt-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.tt-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--tt-border);
+  border-radius: 3px;
+}
+
+.tt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: var(--tt-font);
+}
+
+.tt-table thead tr {
+  position: sticky;
+  top: 0;
+  background: var(--tt-surface);
+  z-index: 1;
+}
+
+.tt-table th {
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--tt-border);
+}
+
+.tt-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(48,54,61,0.6);
+  vertical-align: middle;
+}
+
+.tt-row--normal:hover td { background: rgba(255,255,255,0.025); }
+
+.tt-row--watchlist td {
+  background: var(--tt-watchlist);
+}
+.tt-row--watchlist:hover td {
+  background: rgba(232,184,75,0.18);
+}
+
+.tt-cell-name {
+  color: var(--tt-text);
+  font-weight: 500;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-star {
+  color: var(--tt-accent);
+  margin-right: 4px;
+  font-size: 11px;
+}
+
+.tt-cell-price {
+  color: var(--tt-green);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tt-cell-float {
+  color: var(--tt-muted);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 10px;
+}
+
+.tt-cell-pattern {
+  color: var(--tt-accent);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 600;
+}
+
+.tt-link-btn {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: rgba(232,184,75,0.1);
+  border: 1px solid rgba(232,184,75,0.25);
+  color: var(--tt-accent);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-family: var(--tt-font);
+}
+.tt-link-btn:hover {
+  background: rgba(232,184,75,0.2);
+  border-color: var(--tt-accent);
+}
+
+.tt-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--tt-muted);
+  font-size: 12px;
+  display: none;
+}

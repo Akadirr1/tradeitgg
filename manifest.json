@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "TradeIt Tracker",
+  "version": "1.0.0",
+  "description": "Real-time CS2 skin monitor for tradeit.gg — watchlist alerts, pattern filtering, float tracking.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "TradeIt Tracker"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://tradeit.gg/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://tradeit.gg/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["sounds/sound_normal.mp3", "sounds/sound_watchlist.mp3", "icons/*.png"],
+      "matches": ["*://tradeit.gg/*"]
+    }
+  ]
+}

@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TradeIt Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --surface2: #1c2230;
+      --border:   #30363d;
+      --accent:   #e8b84b;
+      --accent2:  #ff6b35;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --green:    #3fb950;
+      --red:      #f85149;
+      --radius:   8px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      width: 400px;
+      min-height: 520px;
+      max-height: 620px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────────── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.01em;
+    }
+
+    .header-sub {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(63,185,80,0.1);
+      border: 1px solid rgba(63,185,80,0.25);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--green);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .status-pill:hover { background: rgba(63,185,80,0.18); }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Tabs ──────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.02em;
+    }
+
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(232,184,75,0.04);
+    }
+
+    /* ── Scrollable Content ────────────────────────────────── */
+    .tab-content {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .tab-content.active { display: flex; flex-direction: column; gap: 14px; }
+
+    .tab-content::-webkit-scrollbar { width: 4px; }
+    .tab-content::-webkit-scrollbar-track { background: transparent; }
+    .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Section Titles ────────────────────────────────────── */
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    /* ── Cards ─────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    /* ── Inputs ────────────────────────────────────────────── */
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
+    .input-label {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      padding: 7px 10px;
+      outline: none;
+      font-family: 'Inter', sans-serif;
+      transition: border-color 0.15s;
+    }
+    input::placeholder { color: var(--muted); }
+    input:focus, select:focus { border-color: var(--accent); }
+    select option { background: var(--surface); }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────── */
+    .btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #d4a033);
+      color: #0d1117;
+    }
+    .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    .btn-ghost {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+
+    .btn-danger {
+      background: rgba(248,81,73,0.12);
+      color: var(--red);
+      border: 1px solid rgba(248,81,73,0.25);
+    }
+    .btn-danger:hover { background: rgba(248,81,73,0.2); }
+
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+    /* ── Toggle Switch ─────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(48,54,61,0.5);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+
+    .toggle-label {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .toggle-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .toggle-desc {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 22px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle input:checked + .toggle-track { background: var(--accent); }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .toggle input:checked + .toggle-track::after {
+      transform: translateX(18px);
+    }
+
+    /* ── Watchlist Items ───────────────────────────────────── */
+    #watchlist-items, #category-items {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .watchlist-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      animation: slideIn 0.2s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .watchlist-item-info { flex: 1; min-width: 0; }
+
+    .watchlist-item-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+
+    .watchlist-item-meta {
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .watchlist-item-meta span {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .meta-label { color: var(--muted); }
+    .meta-val   { color: var(--accent); font-weight: 600; }
+
+    /* ── Match Log ─────────────────────────────────────────── */
+    #match-log {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .match-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .match-item:hover {
+      border-color: var(--accent);
+      background: rgba(232,184,75,0.06);
+    }
+
+    .match-star { color: var(--accent); font-size: 12px; flex-shrink: 0; }
+
+    .match-info { flex: 1; min-width: 0; }
+    .match-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .match-meta {
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .match-price { color: var(--green); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .match-time  { color: var(--muted); margin-left: auto; flex-shrink: 0; font-size: 10px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px 20px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .empty-state-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
+
+    /* ── Interval Selector ─────────────────────────────────── */
+    .interval-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .interval-btn {
+      flex: 1;
+      padding: 7px;
+      text-align: center;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .interval-btn.active {
+      background: rgba(232,184,75,0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .interval-btn:hover:not(.active) {
+      border-color: var(--muted);
+      color: var(--text);
+    }
+
+    /* ── Poll Now btn ──────────────────────────────────────── */
+    .poll-btn {
+      margin-top: 4px;
+      width: 100%;
+    }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    .footer-stat {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .footer-link {
+      font-size: 10px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .footer-link:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-icon">🎯</div>
+      <div>
+        <div class="header-title">TradeIt Tracker</div>
+        <div class="header-sub">CS2 Real-Time Monitor</div>
+      </div>
+    </div>
+    <div class="status-pill" id="status-pill" title="Click to poll now">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Active</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-watchlist" data-tab="watchlist">⭐ Watchlist</button>
+    <button class="tab-btn" id="tab-categories" data-tab="categories">📂 Categories</button>
+    <button class="tab-btn" id="tab-settings" data-tab="settings">⚙️ Settings</button>
+    <button class="tab-btn" id="tab-log" data-tab="log">📋 Log</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════ TAB: WATCHLIST ═ -->
+  <div class="tab-content active" id="content-watchlist">
+    <div>
+      <div class="section-title">Named Skin Watchlist</div>
+      <div id="watchlist-items"></div>
+      <div class="card">
+        <div class="input-group">
+          <div class="input-label">Skin Name</div>
+          <input type="text" id="wl-name" placeholder='e.g. "Karambit | Fade"' />
+        </div>
+        <div class="input-group">
+          <div class="input-label">Pattern Filter</div>
+          <input type="text" id="wl-patterns" placeholder='e.g. "1-100, 387, 500-600"' />
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <div class="input-label">Float Min</div>
+            <input type="number" id="wl-float-min" placeholder="0.00" min="0" max="1" step="0.001" />
+          </div>
+          <div class="input-group">
+            <div class="input-label">Float Max</div>
+            <input type="number" id="wl-float-max" placeholder="1.00" min="0" max="1" step="0.001" />
+          </div>
+        </div>
+        <button class="btn btn-primary" id="wl-add-btn" style="width:100%">+ Add to Watchlist</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ TAB: CATEGORIES ═══ -->
+  <div class="tab-content" id="content-categories">
+    <div>
+      <div class="section-title">Category Monitors</div>
+      <div id="category-items"></div>
+      <div class="card">
+        <div class="input-group">
+          <div class="input-label">Weapon / Category</div>
+          <select id="cat-weapon">
+            <option value="">Select category...</option>
+            <optgroup label="All Knives / Gloves">
+              <option value="all knives">All Knives</option>
+              <option value="★">All Knives (★)</option>
+              <option value="glove">Gloves</option>
+            </optgroup>
+            <optgroup label="Rifles">
+              <option value="AK-47">AK-47</option>
+              <option value="M4A4">M4A4</option>
+              <option value="M4A1-S">M4A1-S</option>
+              <option value="AWP">AWP</option>
+              <option value="SG 553">SG 553</option>
+              <option value="AUG">AUG</option>
+              <option value="FAMAS">FAMAS</option>
+              <option value="Galil AR">Galil AR</option>
+              <option value="SSG 08">SSG 08</option>
+              <option value="SCAR-20">SCAR-20</option>
+              <option value="G3SG1">G3SG1</option>
+            </optgroup>
+            <optgroup label="Pistols">
+              <option value="Glock-18">Glock-18</option>
+              <option value="USP-S">USP-S</option>
+              <option value="P2000">P2000</option>
+              <option value="Desert Eagle">Desert Eagle</option>
+              <option value="Dual Berettas">Dual Berettas</option>
+              <option value="Five-SeveN">Five-SeveN</option>
+              <option value="CZ75-Auto">CZ75-Auto</option>
+              <option value="Tec-9">Tec-9</option>
+              <option value="P250">P250</option>
+              <option value="R8 Revolver">R8 Revolver</option>
+            </optgroup>
+            <optgroup label="SMGs">
+              <option value="MP9">MP9</option>
+              <option value="MAC-10">MAC-10</option>
+              <option value="MP7">MP7</option>
+              <option value="UMP-45">UMP-45</option>
+              <option value="P90">P90</option>
+              <option value="PP-Bizon">PP-Bizon</option>
+              <option value="MP5-SD">MP5-SD</option>
+            </optgroup>
+            <optgroup label="Heavy">
+              <option value="Nova">Nova</option>
+              <option value="XM1014">XM1014</option>
+              <option value="Sawed-Off">Sawed-Off</option>
+              <option value="MAG-7">MAG-7</option>
+              <option value="M249">M249</option>
+              <option value="Negev">Negev</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="input-group">
+          <div class="input-label">Pattern Filter</div>
+          <input type="text" id="cat-patterns" placeholder='e.g. "1-100, 387"' />
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <div class="input-label">Float Min</div>
+            <input type="number" id="cat-float-min" placeholder="0.00" min="0" max="1" step="0.001" />
+          </div>
+          <div class="input-group">
+            <div class="input-label">Float Max</div>
+            <input type="number" id="cat-float-max" placeholder="1.00" min="0" max="1" step="0.001" />
+          </div>
+        </div>
+        <button class="btn btn-primary" id="cat-add-btn" style="width:100%">+ Add Category Monitor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ TAB: SETTINGS ══ -->
+  <div class="tab-content" id="content-settings">
+    <div>
+      <div class="section-title">Alert Sounds</div>
+      <div class="card">
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <div class="toggle-name">Normal Item Sound</div>
+            <div class="toggle-desc">Plays on every new skin listing</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="s-sound-normal" />
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <div class="toggle-name">Watchlist Match Sound</div>
+            <div class="toggle-desc">Plays when a watchlist item appears</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="s-sound-watchlist" />
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <div class="toggle-name">On-Screen Popups</div>
+            <div class="toggle-desc">Show overlay notifications on tradeit.gg</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="s-popup" />
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Polling Interval</div>
+      <div class="card">
+        <div class="interval-group" id="interval-group">
+          <button class="interval-btn" data-val="5">5s</button>
+          <button class="interval-btn" data-val="10">10s</button>
+          <button class="interval-btn" data-val="30">30s</button>
+          <button class="interval-btn" data-val="60">1m</button>
+        </div>
+        <button class="btn btn-ghost poll-btn" id="poll-now-btn">▶ Poll Now</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Debug Info</div>
+      <div class="card">
+        <div id="debug-info" style="font-size:11px;color:var(--muted);line-height:1.8;font-family:'JetBrains Mono',monospace;">
+          Loading...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ TAB: LOG ════════ -->
+  <div class="tab-content" id="content-log">
+    <div class="section-title">Recent Matches (last 20)</div>
+    <div id="match-log">
+      <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        No matches yet. Add items to your watchlist and keep tradeit.gg open.
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-stat" id="footer-stat">Monitoring CS2 market</div>
+    <a class="footer-link" href="https://tradeit.gg/csgo/store" target="_blank">Open tradeit.gg →</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
