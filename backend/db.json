@@ -1,0 +1,10 @@
+{
+  "keys": {
+    "test-api-key-123": {
+      "deviceId": "979ec9aa-ae27-4e41-95ab-eede9b8cd67d"
+    },
+    "premium-key-456": {
+      "deviceId": null
+    }
+  }
+}
