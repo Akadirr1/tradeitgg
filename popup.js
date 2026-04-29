@@ -16,6 +16,7 @@ tabs.forEach(btn => {
     btn.classList.add('active');
     document.getElementById(`content-${target}`).classList.add('active');
     if (target === 'log') loadMatchLog();
+    if (target === 'latest') loadLatestLog();
   });
 });
 
@@ -296,8 +297,29 @@ async function searchSkins(query, wrapper, dropdown, inputEl) {
     const seen = new Set();
     const unique = [];
     for (const it of items) {
-      const n = it.name ?? '';
-      if (n && !seen.has(n)) { seen.add(n); unique.push(it); }
+      const originalName = it.name ?? '';
+      if (!originalName) continue;
+
+      const baseName = stripWear(originalName);
+      
+      // Eğer item bir silah skiniyse (aşınma durumu varsa), 5 varyasyonunu da üret
+      if (baseName !== originalName) {
+        const WEARS = ['(Factory New)', '(Minimal Wear)', '(Field-Tested)', '(Well-Worn)', '(Battle-Scarred)'];
+        for (const w of WEARS) {
+          const generatedName = `${baseName} ${w}`;
+          if (!seen.has(generatedName)) {
+            seen.add(generatedName);
+            // Sadece ismini değiştirerek listeye ekliyoruz, ikon vs. aynı kalacak
+            unique.push({ ...it, name: generatedName });
+          }
+        }
+      } else {
+        // Silah değilse (Sticker, Ajan vs.) veya suffix'i yoksa direkt ekle
+        if (!seen.has(originalName)) {
+          seen.add(originalName);
+          unique.push(it);
+        }
+      }
     }
 
     if (unique.length === 0) {
@@ -350,17 +372,7 @@ document.getElementById('wl-add-btn').addEventListener('click', () => {
   // Must have a name
   if (!rawInput) { shakeInput('wl-name'); return; }
 
-  // Must be a confirmed skin from the dropdown
-  if (!selectedSkinName || selectedSkinName !== rawInput) {
-    const el = document.getElementById('wl-name');
-    el.style.borderColor = 'var(--red)';
-    el.placeholder = 'Please select a skin from the search list ↑';
-    setTimeout(() => {
-      el.style.borderColor = '';
-      el.placeholder = 'e.g. "Karambit | Fade"';
-    }, 1800);
-    return;
-  }
+
 
   // Collect fields based on active mode
   let patterns = '', floatMin = '', floatMax = '';
@@ -377,8 +389,8 @@ document.getElementById('wl-add-btn').addEventListener('click', () => {
 
   // Pattern modunda aşınma suffix'ini temizle → tüm wear'ları kapsar
   const nameToSave = wlFilterMode === 'pattern'
-    ? stripWear(selectedSkinName)
-    : selectedSkinName;
+    ? stripWear(rawInput)
+    : rawInput;
 
   if (!settings.watchlist) settings.watchlist = [];
 
@@ -524,18 +536,9 @@ document.getElementById('st-add-btn').addEventListener('click', () => {
   if (!rawInput) { shakeInput('st-name'); return; }
   if (!minStickerValue) { shakeInput('st-sticker-val'); return; }
 
-  if (!selectedSkinName || selectedSkinName !== rawInput) {
-    const el = document.getElementById('st-name');
-    el.style.borderColor = 'var(--red)';
-    el.placeholder = 'Please select a skin from the search list ↑';
-    setTimeout(() => {
-      el.style.borderColor = '';
-      el.placeholder = 'e.g. "AK-47 | Redline"';
-    }, 1800);
-    return;
-  }
 
-  const nameToSave = stripWear(selectedSkinName);
+
+  const nameToSave = stripWear(rawInput);
 
   if (!settings.stickerMonitors) settings.stickerMonitors = [];
   
@@ -574,11 +577,10 @@ function renderSettingsForm() {
   });
 
   // Telegram
-  const tg = settings.telegram ?? {};
+  const tg = settings.telegram ?? { enabled: false, bots: [] };
   document.getElementById('s-tg-enabled').checked = tg.enabled === true;
-  document.getElementById('tg-token').value  = tg.token  ?? '';
-  document.getElementById('tg-chatid').value = tg.chatId ?? '';
   updateTgStatus();
+  renderTgBots();
 }
 
 // Toggle listeners (sounds & popup)
@@ -598,8 +600,9 @@ function renderSettingsForm() {
 // TELEGRAM SETTINGS
 // ══════════════════════════════════════════════════════════
 function updateTgStatus() {
-  const tg     = settings.telegram ?? {};
-  const active = tg.enabled && tg.token && tg.chatId;
+  const tg     = settings.telegram ?? { enabled: false, bots: [] };
+  const bots   = tg.bots || [];
+  const active = tg.enabled && bots.length > 0;
   const badge  = document.getElementById('tg-status');
   const fields = document.getElementById('tg-fields');
   if (badge) {
@@ -610,58 +613,100 @@ function updateTgStatus() {
 }
 
 document.getElementById('s-tg-enabled').addEventListener('change', (e) => {
-  if (!settings.telegram) settings.telegram = {};
+  if (!settings.telegram) settings.telegram = { enabled: false, bots: [] };
   settings.telegram.enabled = e.target.checked;
   updateTgStatus();
   saveSettings();
 });
 
-document.getElementById('tg-save-btn').addEventListener('click', () => {
-  const token  = document.getElementById('tg-token').value.trim();
-  const chatId = document.getElementById('tg-chatid').value.trim();
-  const msg    = document.getElementById('tg-test-msg');
+function renderTgBots() {
+  const container = document.getElementById('tg-bot-list');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  const tg = settings.telegram ?? { enabled: false, bots: [] };
+  const bots = tg.bots || [];
 
-  if (!token || !chatId) {
-    msg.textContent = '⚠️ Please fill in both fields.';
+  if (bots.length === 0) {
+    container.innerHTML = `<div style="font-size:11px;color:var(--muted);text-align:center;padding:10px;">No bots added. Add one below.</div>`;
+    return;
+  }
+
+  bots.forEach((bot, idx) => {
+    const el = document.createElement('div');
+    el.className = 'watchlist-item';
+    el.style.alignItems = 'center';
+    el.innerHTML = `
+      <div class="watchlist-item-info">
+        <div class="watchlist-item-name">🤖 ${escHtml(bot.name)}</div>
+        <div class="watchlist-item-meta">
+          <span><span class="meta-label">Chat ID:</span><span class="meta-val">${escHtml(bot.chatId)}</span></span>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm tg-test-item-btn" data-idx="${idx}" title="Test">&#9992;</button>
+      <button class="btn btn-danger btn-sm tg-del-item-btn" data-idx="${idx}" title="Delete">✕</button>
+    `;
+    container.appendChild(el);
+  });
+
+  container.querySelectorAll('.tg-del-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      settings.telegram.bots.splice(Number(btn.dataset.idx), 1);
+      saveSettings();
+      updateTgStatus();
+      renderTgBots();
+    });
+  });
+
+  container.querySelectorAll('.tg-test-item-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = Number(btn.dataset.idx);
+      const bot = settings.telegram.bots[idx];
+      const origText = btn.innerHTML;
+      btn.innerHTML = '⏳';
+      try {
+        const result = await chrome.runtime.sendMessage({ type: 'TG_TEST', token: bot.token, chatId: bot.chatId });
+        if (result?.ok) {
+          btn.innerHTML = '✅';
+        } else {
+          btn.innerHTML = '❌';
+          alert('Test failed: ' + (result?.error || 'Unknown error'));
+        }
+      } catch (err) {
+        btn.innerHTML = '❌';
+      }
+      setTimeout(() => { btn.innerHTML = origText; }, 3000);
+    });
+  });
+}
+
+document.getElementById('tg-add-btn').addEventListener('click', () => {
+  const name   = document.getElementById('tg-new-name').value.trim();
+  const token  = document.getElementById('tg-new-token').value.trim();
+  const chatId = document.getElementById('tg-new-chatid').value.trim();
+  const msg    = document.getElementById('tg-form-msg');
+
+  if (!name || !token || !chatId) {
+    msg.textContent = '⚠️ Fill all fields.';
     msg.className = 'tg-test-msg err';
     return;
   }
 
-  if (!settings.telegram) settings.telegram = {};
-  settings.telegram.token  = token;
-  settings.telegram.chatId = chatId;
+  if (!settings.telegram) settings.telegram = { enabled: false, bots: [] };
+  if (!settings.telegram.bots) settings.telegram.bots = [];
+  
+  settings.telegram.bots.push({ name, token, chatId });
   saveSettings();
   updateTgStatus();
-  msg.textContent = '✅ Saved!';
+  renderTgBots();
+
+  document.getElementById('tg-new-name').value = '';
+  document.getElementById('tg-new-token').value = '';
+  document.getElementById('tg-new-chatid').value = '';
+
+  msg.textContent = '✅ Added!';
   msg.className = 'tg-test-msg ok';
-  setTimeout(() => { msg.textContent = 'Saved. Click Test to verify.'; msg.className = 'tg-test-msg'; }, 2000);
-});
-
-document.getElementById('tg-test-btn').addEventListener('click', async () => {
-  const msg = document.getElementById('tg-test-msg');
-  const tg  = settings.telegram ?? {};
-  if (!tg.token || !tg.chatId) {
-    msg.textContent = '⚠️ Save token & Chat ID first.';
-    msg.className = 'tg-test-msg err';
-    return;
-  }
-  msg.textContent = '⏳ Sending...';
-  msg.className = 'tg-test-msg';
-
-  try {
-    const result = await chrome.runtime.sendMessage({ type: 'TG_TEST' });
-    if (result?.ok) {
-      msg.textContent = '✅ Message sent!';
-      msg.className = 'tg-test-msg ok';
-    } else {
-      msg.textContent = `❌ ${result?.error ?? 'Failed'}`;
-      msg.className = 'tg-test-msg err';
-    }
-  } catch (e) {
-    msg.textContent = '❌ Background error.';
-    msg.className = 'tg-test-msg err';
-  }
-  setTimeout(() => { msg.textContent = 'Ready.'; msg.className = 'tg-test-msg'; }, 4000);
+  setTimeout(() => { msg.textContent = ''; }, 2000);
 });
 
 // Interval buttons
@@ -739,7 +784,9 @@ async function loadMatchLog() {
     const price   = m.price ? `$${(m.price / 100).toFixed(2)}` : 'N/A';
     const float   = m.floatValue !== null && m.floatValue !== undefined ? m.floatValue.toFixed(4) : 'N/A';
     const pattern = m.patternIndex !== null && m.patternIndex !== undefined ? m.patternIndex : 'N/A';
-    const when    = timeAgo(m.timestamp);
+    const logTs   = m.timestamp;
+    const when    = timeAgo(logTs);
+    const clockTime = logTs ? new Date(logTs).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
 
     a.innerHTML = `
       <div class="match-star">★</div>
@@ -750,11 +797,73 @@ async function loadMatchLog() {
           <span>Float: ${float}</span>
           <span>Pat: ${pattern}</span>
           ${m.totalStickerValue > 0 ? `<span style="color:var(--accent)">Stickers: $${(m.totalStickerValue / 100).toFixed(2)}</span>` : ''}
-          <span class="match-time">${when}</span>
+        </div>
+        <div class="match-meta" style="margin-top:2px;opacity:0.65;font-size:10px">
+          <span>🕐 ${clockTime ? clockTime + ' · ' : ''}${when}</span>
         </div>
       </div>
     `;
     log.appendChild(a);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// LATEST LOG TAB
+// ══════════════════════════════════════════════════════════
+async function loadLatestLog() {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'GET_LATEST_ITEMS' });
+    const items = result?.items ?? [];
+    const log = document.getElementById('latest-log');
+    if (!log) return;
+
+    if (items.length === 0) {
+      log.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div>No items checked yet. Keep the bot running.</div>`;
+      return;
+    }
+
+    log.innerHTML = '';
+    for (const m of items) {
+      const a = document.createElement('a');
+      a.className = 'match-item';
+      a.href = m.tradeUrl;
+      a.target = '_blank';
+
+      const price   = m.price ? `$${(m.price / 100).toFixed(2)}` : 'N/A';
+      const float   = m.floatValue !== null && m.floatValue !== undefined ? m.floatValue.toFixed(4) : 'N/A';
+      const pattern = m.patternIndex !== null && m.patternIndex !== undefined ? m.patternIndex : 'N/A';
+      // m.timestamp = botun algilama ani (her zaman guncel)
+      // m.listingTime = API'nin createdAt (9 gun once gibi eski olabilir)
+      const detectedTs = m.timestamp;
+      const when       = timeAgo(detectedTs);
+      const clockTime  = detectedTs
+        ? new Date(detectedTs).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : '';
+      
+      let totalStickerValue = 0;
+      if (m.stickers && m.stickers.length > 0) {
+        for (const s of m.stickers) totalStickerValue += s.price ?? 0;
+      }
+
+      a.innerHTML = `
+        <div class="match-star" style="color:var(--muted)">👁️</div>
+        <div class="match-info">
+          <div class="match-name">${escHtml(m.name)}</div>
+          <div class="match-meta">
+            <span class="match-price">${price}</span>
+            <span>Float: ${float}</span>
+            <span>Pat: ${pattern}</span>
+            ${totalStickerValue > 0 ? `<span style="color:var(--accent)">Stickers: $${(totalStickerValue / 100).toFixed(2)}</span>` : ''}
+          </div>
+          <div class="match-meta" style="margin-top:2px;opacity:0.65;font-size:10px">
+            <span title="Listeleme saati: ${clockTime}">🕐 ${clockTime ? clockTime + ' · ' : ''}${when}</span>
+          </div>
+        </div>
+      `;
+      log.appendChild(a);
+    }
+  } catch (err) {
+    console.error('Failed to load latest log', err);
   }
 }
 
@@ -804,11 +913,14 @@ function shakeInput(id) {
 
 function timeAgo(ts) {
   if (!ts) return '';
-  const diff = Math.floor((Date.now() - ts) / 1000);
-  if (diff < 60)   return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  // Unix ms veya ISO string kabul et
+  const t = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  const diff = Math.floor((Date.now() - t) / 1000);
+  if (diff < 0)    return 'henuz';
+  if (diff < 60)   return `${diff}s once`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m once`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h once`;
+  return `${Math.floor(diff / 86400)}g once`;
 }
 
 // ── Boot ───────────────────────────────────────────────────

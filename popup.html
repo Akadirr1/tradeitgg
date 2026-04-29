@@ -694,6 +694,7 @@
     <button class="tab-btn" id="tab-stickers" data-tab="stickers">🏷️ Stickers</button>
     <button class="tab-btn" id="tab-settings" data-tab="settings">⚙️ Settings</button>
     <button class="tab-btn" id="tab-log" data-tab="log">📋 Log</button>
+    <button class="tab-btn" id="tab-latest" data-tab="latest" style="min-width:0; padding:10px 4px;">🔍 Latest</button>
   </div>
 
   <!-- ═══════════════════════════════════════ TAB: WATCHLIST ═ -->
@@ -957,18 +958,23 @@
         </div>
 
         <div class="tg-fields" id="tg-fields">
-          <div class="input-group" style="margin-bottom:0">
-            <div class="input-label">Bot Token</div>
-            <input type="text" id="tg-token" placeholder="123456789:ABCdefGHI..." autocomplete="off" />
-          </div>
-          <div class="input-group" style="margin-bottom:0">
-            <div class="input-label">Chat ID</div>
-            <input type="text" id="tg-chatid" placeholder="e.g. 123456789 or @username" autocomplete="off" />
-          </div>
-          <div class="tg-test-row">
-            <button class="btn btn-ghost btn-sm" id="tg-save-btn" style="flex-shrink:0">💾 Save</button>
-            <button class="btn btn-ghost btn-sm" id="tg-test-btn" style="flex-shrink:0">&#9992; Test</button>
-            <span class="tg-test-msg" id="tg-test-msg">Enter token &amp; Chat ID, then save.</span>
+          <div id="tg-bot-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
+          
+          <div style="background:var(--surface2); border:1px solid var(--border); padding:10px; border-radius:6px;">
+            <div style="font-size:11px; font-weight:600; margin-bottom:8px;">Add New Bot</div>
+            <div class="input-group" style="margin-bottom:6px">
+              <input type="text" id="tg-new-name" placeholder="Bot Name (e.g. My Phone)" autocomplete="off" />
+            </div>
+            <div class="input-group" style="margin-bottom:6px">
+              <input type="text" id="tg-new-token" placeholder="Bot Token (123456789:ABC...)" autocomplete="off" />
+            </div>
+            <div class="input-group" style="margin-bottom:8px">
+              <input type="text" id="tg-new-chatid" placeholder="Chat ID (e.g. 123456789)" autocomplete="off" />
+            </div>
+            <div class="tg-test-row">
+              <button class="btn btn-primary btn-sm" id="tg-add-btn" style="flex:1">+ Add Bot</button>
+              <span class="tg-test-msg" id="tg-form-msg" style="margin-left:8px; flex:2;"></span>
+            </div>
           </div>
         </div>
 
@@ -996,6 +1002,17 @@
       <div class="empty-state">
         <div class="empty-state-icon">📭</div>
         No matches yet. Add items to your watchlist and keep tradeit.gg open.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ TAB: LATEST ════════ -->
+  <div class="tab-content" id="content-latest">
+    <div class="section-title">Latest Checked Items (last 40)</div>
+    <div id="latest-log">
+      <div class="empty-state">
+        <div class="empty-state-icon">🔍</div>
+        No items checked yet.
       </div>
     </div>
   </div>
