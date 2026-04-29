@@ -415,6 +415,145 @@
     }
     .empty-state-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
 
+    /* ── Skin Search Autocomplete ───────────────────────── */
+    .search-wrapper {
+      position: relative;
+    }
+
+    .skin-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      z-index: 9999;
+      max-height: 180px;
+      overflow-y: auto;
+      display: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .skin-dropdown.open { display: block; }
+    .skin-dropdown::-webkit-scrollbar { width: 4px; }
+    .skin-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .skin-option {
+      padding: 7px 10px;
+      font-size: 11px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid rgba(48,54,61,0.5);
+      transition: background 0.1s;
+    }
+    .skin-option:last-child { border-bottom: none; }
+    .skin-option:hover, .skin-option.highlighted {
+      background: rgba(232,184,75,0.1);
+      color: var(--accent);
+    }
+    .skin-option-img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+      flex-shrink: 0;
+      border-radius: 3px;
+    }
+    .skin-option-name {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .skin-search-spinner {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+    .search-wrapper.loading .skin-search-spinner { display: block; }
+
+    /* ── Telegram Card ───────────────────────────── */
+    .tg-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .tg-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #2aabee, #1d8dd4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .tg-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .tg-sub {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .tg-status {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .tg-status.connected {
+      background: rgba(63,185,80,0.12);
+      color: var(--green);
+      border: 1px solid rgba(63,185,80,0.3);
+    }
+    .tg-status.disconnected {
+      background: rgba(139,148,158,0.1);
+      color: var(--muted);
+      border: 1px solid rgba(139,148,158,0.2);
+    }
+    .tg-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .tg-fields.disabled { opacity: 0.45; pointer-events: none; }
+    .tg-test-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .tg-test-msg {
+      font-size: 10px;
+      flex: 1;
+      color: var(--muted);
+    }
+    .tg-test-msg.ok  { color: var(--green); }
+    .tg-test-msg.err { color: var(--red); }
+
+    .skin-no-results {
+      padding: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+    }
+
     /* ── Interval Selector ─────────────────────────────────── */
     .interval-group {
       display: flex;
@@ -507,8 +646,12 @@
       <div id="watchlist-items"></div>
       <div class="card">
         <div class="input-group">
-          <div class="input-label">Skin Name</div>
-          <input type="text" id="wl-name" placeholder='e.g. "Karambit | Fade"' />
+          <div class="input-label">Skin Name — <span style="color:var(--accent);font-weight:400">type to search</span></div>
+          <div class="search-wrapper" id="wl-search-wrapper">
+            <input type="text" id="wl-name" placeholder='e.g. "Karambit | Fade"' autocomplete="off" />
+            <div class="skin-search-spinner"></div>
+            <div class="skin-dropdown" id="wl-skin-dropdown"></div>
+          </div>
         </div>
         <div class="input-group">
           <div class="input-label">Pattern Filter</div>
@@ -655,6 +798,52 @@
           <button class="interval-btn" data-val="60">1m</button>
         </div>
         <button class="btn btn-ghost poll-btn" id="poll-now-btn">▶ Poll Now</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Telegram Notifications</div>
+      <div class="card">
+        <div class="tg-header">
+          <div class="tg-logo">📨</div>
+          <div>
+            <div class="tg-title">Telegram Bot</div>
+            <div class="tg-sub">Get alerts directly in Telegram</div>
+          </div>
+          <span class="tg-status disconnected" id="tg-status">Off</span>
+        </div>
+
+        <div class="toggle-row" style="margin-bottom:10px">
+          <div class="toggle-label">
+            <div class="toggle-name">Enable Telegram Alerts</div>
+            <div class="toggle-desc">Send watchlist matches to Telegram</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="s-tg-enabled" />
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+
+        <div class="tg-fields" id="tg-fields">
+          <div class="input-group" style="margin-bottom:0">
+            <div class="input-label">Bot Token</div>
+            <input type="text" id="tg-token" placeholder="123456789:ABCdefGHI..." autocomplete="off" />
+          </div>
+          <div class="input-group" style="margin-bottom:0">
+            <div class="input-label">Chat ID</div>
+            <input type="text" id="tg-chatid" placeholder="e.g. 123456789 or @username" autocomplete="off" />
+          </div>
+          <div class="tg-test-row">
+            <button class="btn btn-ghost btn-sm" id="tg-save-btn" style="flex-shrink:0">💾 Save</button>
+            <button class="btn btn-ghost btn-sm" id="tg-test-btn" style="flex-shrink:0">&#9992; Test</button>
+            <span class="tg-test-msg" id="tg-test-msg">Enter token &amp; Chat ID, then save.</span>
+          </div>
+        </div>
+
+        <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6">
+          💡 Create a bot via <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent)">@BotFather</a> and get the token.<br>
+          Then send a message to your bot and use <a href="https://api.telegram.org/bot<TOKEN>/getUpdates" target="_blank" style="color:var(--accent)">getUpdates</a> to find your Chat ID.
+        </div>
       </div>
     </div>
 

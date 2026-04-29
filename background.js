@@ -141,6 +141,13 @@ async function pollMarket() {
     // Persist recent matches
     await chrome.storage.local.set({ recentMatches });
 
+    // Send Telegram alerts for watchlist matches
+    if (watchlistMatches.length > 0) {
+      for (const item of watchlistMatches) {
+        await sendTelegramAlert(item, cfg);
+      }
+    }
+
     // Notify active tradeit.gg tabs
     await notifyTabs({ watchlistMatches, regularItems, settings: cfg });
 
@@ -264,6 +271,55 @@ function recordMatch(item) {
 }
 
 // ============================================================
+// Telegram integration
+// ============================================================
+async function sendTelegram(token, chatId, text) {
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+  });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.description ?? 'Telegram API error');
+  return json;
+}
+
+async function sendTelegramAlert(item, cfg) {
+  try {
+    const tg = cfg.telegram ?? {};
+    if (!tg.enabled || !tg.token || !tg.chatId) return;
+
+    const price   = item.price ? `$${(item.price / 100).toFixed(2)}` : 'N/A';
+    const float_  = item.floatValue !== null && item.floatValue !== undefined
+                    ? item.floatValue.toFixed(6) : 'N/A';
+    const pattern = item.patternIndex !== null && item.patternIndex !== undefined
+                    ? item.patternIndex : 'N/A';
+    const matchedBy = item.watchlistMatch?.entry?.name
+                    ?? item.watchlistMatch?.entry?.weapon
+                    ?? 'Watchlist';
+
+    const lines = [
+      '\u2605 <b>Watchlist Match!</b>',
+      '',
+      `\ud83d\udd2b <b>${item.name}</b>`,
+      '',
+      `\ud83d\udcb0 Price:   <code>${price}</code>`,
+      `\ud83c\udf0a Float:   <code>${float_}</code>`,
+      `\ud83c\udfa8 Pattern: <code>${pattern}</code>`,
+      `\ud83d\udcc2 Match:   <code>${matchedBy}</code>`,
+      '',
+      `\ud83d\udd17 <a href="${item.tradeUrl}">View on tradeit.gg</a>`,
+    ];
+
+    await sendTelegram(tg.token, tg.chatId, lines.join('\n'));
+    console.log(`[TradeIt Tracker] Telegram alert sent for: ${item.name}`);
+  } catch (err) {
+    console.warn('[TradeIt Tracker] Telegram alert failed:', err.message);
+  }
+}
+
+// ============================================================
 // Tab messaging
 // ============================================================
 async function notifyTabs(payload) {
@@ -309,6 +365,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       seenCount: seenIds.size,
       backoffDelay,
       matchCount: recentMatches.length,
+    });
+    return true;
+  }
+
+  if (msg.type === 'TG_TEST') {
+    chrome.storage.local.get('settings').then(async (data) => {
+      const tg = data.settings?.telegram ?? {};
+      if (!tg.token || !tg.chatId) {
+        sendResponse({ ok: false, error: 'No token or Chat ID saved.' });
+        return;
+      }
+      try {
+        await sendTelegram(
+          tg.token,
+          tg.chatId,
+          '\u2705 <b>TradeIt Tracker</b> bağlantı testi başarılı!\n\nWatchlist eşleşmeleri bu şekilde görünecek.'
+        );
+        sendResponse({ ok: true });
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message });
+      }
     });
     return true;
   }

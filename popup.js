@@ -27,6 +27,11 @@ let settings = {
   popupEnabled: true,
   watchlist: [],
   categoryMonitors: [],
+  telegram: {
+    enabled: false,
+    token: '',
+    chatId: '',
+  },
 };
 
 // ── Initialize ─────────────────────────────────────────────
@@ -94,16 +99,155 @@ function renderWatchlist() {
   });
 }
 
+// ── Skin Search Autocomplete ───────────────────────────────
+let skinSearchTimer   = null;
+let selectedSkinName  = '';   // only set when user picks from dropdown
+let highlightedIdx    = -1;
+
+const wlNameInput  = document.getElementById('wl-name');
+const wlDropdown   = document.getElementById('wl-skin-dropdown');
+const wlWrapper    = document.getElementById('wl-search-wrapper');
+
+// Clear validated name whenever user types (forces re-selection)
+wlNameInput.addEventListener('input', () => {
+  selectedSkinName = '';
+  highlightedIdx = -1;
+  const q = wlNameInput.value.trim();
+  clearTimeout(skinSearchTimer);
+  if (q.length < 2) { closeDropdown(); return; }
+  skinSearchTimer = setTimeout(() => searchSkins(q), 350);
+});
+
+// Keyboard navigation
+wlNameInput.addEventListener('keydown', (e) => {
+  const options = wlDropdown.querySelectorAll('.skin-option');
+  if (!options.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    highlightedIdx = Math.min(highlightedIdx + 1, options.length - 1);
+    updateHighlight(options);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    highlightedIdx = Math.max(highlightedIdx - 1, 0);
+    updateHighlight(options);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (highlightedIdx >= 0 && options[highlightedIdx]) {
+      options[highlightedIdx].click();
+    }
+  } else if (e.key === 'Escape') {
+    closeDropdown();
+  }
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('mousedown', (e) => {
+  if (!wlWrapper.contains(e.target)) closeDropdown();
+});
+
+async function searchSkins(query) {
+  wlWrapper.classList.add('loading');
+  wlDropdown.classList.add('open');
+  wlDropdown.innerHTML = '';
+
+  try {
+    const url = `https://tradeit.gg/api/v2/inventory/data?gameId=730&offset=0&limit=20&sortType=Popularity&searchValue=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/json', 'Referer': 'https://tradeit.gg/' }
+    });
+    if (!res.ok) throw new Error('API error');
+    const json = await res.json();
+    const items = json?.items ?? json?.data ?? [];
+
+    // Deduplicate by name
+    const seen = new Set();
+    const unique = [];
+    for (const it of items) {
+      const n = it.name ?? '';
+      if (n && !seen.has(n)) { seen.add(n); unique.push(it); }
+    }
+
+    if (unique.length === 0) {
+      wlDropdown.innerHTML = `<div class="skin-no-results">No skins found for "${escHtml(query)}"</div>`;
+    } else {
+      highlightedIdx = -1;
+      unique.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'skin-option';
+        const imgSrc = item.imgURL ?? item.iconUrl ?? '';
+        div.innerHTML = `
+          ${imgSrc ? `<img class="skin-option-img" src="${escHtml(imgSrc)}" alt="" loading="lazy">` : '<div style="width:28px"></div>'}
+          <span class="skin-option-name">${escHtml(item.name)}</span>
+        `;
+        div.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // prevent blur
+          selectSkin(item.name);
+        });
+        wlDropdown.appendChild(div);
+      });
+    }
+  } catch (_) {
+    wlDropdown.innerHTML = `<div class="skin-no-results">Search failed. Try again.</div>`;
+  } finally {
+    wlWrapper.classList.remove('loading');
+  }
+}
+
+function selectSkin(name) {
+  selectedSkinName = name;
+  wlNameInput.value = name;
+  closeDropdown();
+}
+
+function closeDropdown() {
+  wlDropdown.classList.remove('open');
+  wlDropdown.innerHTML = '';
+  highlightedIdx = -1;
+}
+
+function updateHighlight(options) {
+  options.forEach((o, i) => o.classList.toggle('highlighted', i === highlightedIdx));
+  if (highlightedIdx >= 0) options[highlightedIdx].scrollIntoView({ block: 'nearest' });
+}
+
+// ── Watchlist Add Button ────────────────────────────────────
 document.getElementById('wl-add-btn').addEventListener('click', () => {
-  const name     = document.getElementById('wl-name').value.trim();
+  const rawInput = wlNameInput.value.trim();
   const patterns = document.getElementById('wl-patterns').value.trim();
   const floatMin = document.getElementById('wl-float-min').value.trim();
   const floatMax = document.getElementById('wl-float-max').value.trim();
 
-  if (!name) { shakeInput('wl-name'); return; }
+  // Must have a name
+  if (!rawInput) { shakeInput('wl-name'); return; }
+
+  // Must be a confirmed skin from the dropdown
+  if (!selectedSkinName || selectedSkinName !== rawInput) {
+    // Flash red to signal the user must pick from dropdown
+    const el = document.getElementById('wl-name');
+    el.style.borderColor = 'var(--red)';
+    el.placeholder = 'Please select a skin from the search list ↑';
+    setTimeout(() => {
+      el.style.borderColor = '';
+      el.placeholder = 'e.g. "Karambit | Fade"';
+    }, 1800);
+    return;
+  }
 
   if (!settings.watchlist) settings.watchlist = [];
-  settings.watchlist.push({ name, patterns, floatMin, floatMax });
+
+  // Prevent duplicate entries
+  const alreadyExists = settings.watchlist.some(
+    e => e.name.toLowerCase() === selectedSkinName.toLowerCase()
+  );
+  if (alreadyExists) {
+    const el = document.getElementById('wl-name');
+    el.style.borderColor = 'var(--accent)';
+    setTimeout(() => el.style.borderColor = '', 1200);
+    return;
+  }
+
+  settings.watchlist.push({ name: selectedSkinName, patterns, floatMin, floatMax });
+  selectedSkinName = '';
   saveSettings();
   renderWatchlist();
 
@@ -184,9 +328,16 @@ function renderSettingsForm() {
   document.querySelectorAll('.interval-btn').forEach(btn => {
     btn.classList.toggle('active', Number(btn.dataset.val) === settings.pollingInterval);
   });
+
+  // Telegram
+  const tg = settings.telegram ?? {};
+  document.getElementById('s-tg-enabled').checked = tg.enabled === true;
+  document.getElementById('tg-token').value  = tg.token  ?? '';
+  document.getElementById('tg-chatid').value = tg.chatId ?? '';
+  updateTgStatus();
 }
 
-// Toggle listeners
+// Toggle listeners (sounds & popup)
 ['s-sound-normal', 's-sound-watchlist', 's-popup'].forEach(id => {
   document.getElementById(id).addEventListener('change', (e) => {
     const map = {
@@ -197,6 +348,76 @@ function renderSettingsForm() {
     settings[map[id]] = e.target.checked;
     saveSettings();
   });
+});
+
+// ══════════════════════════════════════════════════════════
+// TELEGRAM SETTINGS
+// ══════════════════════════════════════════════════════════
+function updateTgStatus() {
+  const tg     = settings.telegram ?? {};
+  const active = tg.enabled && tg.token && tg.chatId;
+  const badge  = document.getElementById('tg-status');
+  const fields = document.getElementById('tg-fields');
+  if (badge) {
+    badge.textContent = active ? '✅ Active' : 'Off';
+    badge.className   = `tg-status ${active ? 'connected' : 'disconnected'}`;
+  }
+  if (fields) fields.classList.toggle('disabled', !tg.enabled);
+}
+
+document.getElementById('s-tg-enabled').addEventListener('change', (e) => {
+  if (!settings.telegram) settings.telegram = {};
+  settings.telegram.enabled = e.target.checked;
+  updateTgStatus();
+  saveSettings();
+});
+
+document.getElementById('tg-save-btn').addEventListener('click', () => {
+  const token  = document.getElementById('tg-token').value.trim();
+  const chatId = document.getElementById('tg-chatid').value.trim();
+  const msg    = document.getElementById('tg-test-msg');
+
+  if (!token || !chatId) {
+    msg.textContent = '⚠️ Please fill in both fields.';
+    msg.className = 'tg-test-msg err';
+    return;
+  }
+
+  if (!settings.telegram) settings.telegram = {};
+  settings.telegram.token  = token;
+  settings.telegram.chatId = chatId;
+  saveSettings();
+  updateTgStatus();
+  msg.textContent = '✅ Saved!';
+  msg.className = 'tg-test-msg ok';
+  setTimeout(() => { msg.textContent = 'Saved. Click Test to verify.'; msg.className = 'tg-test-msg'; }, 2000);
+});
+
+document.getElementById('tg-test-btn').addEventListener('click', async () => {
+  const msg = document.getElementById('tg-test-msg');
+  const tg  = settings.telegram ?? {};
+  if (!tg.token || !tg.chatId) {
+    msg.textContent = '⚠️ Save token & Chat ID first.';
+    msg.className = 'tg-test-msg err';
+    return;
+  }
+  msg.textContent = '⏳ Sending...';
+  msg.className = 'tg-test-msg';
+
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'TG_TEST' });
+    if (result?.ok) {
+      msg.textContent = '✅ Message sent!';
+      msg.className = 'tg-test-msg ok';
+    } else {
+      msg.textContent = `❌ ${result?.error ?? 'Failed'}`;
+      msg.className = 'tg-test-msg err';
+    }
+  } catch (e) {
+    msg.textContent = '❌ Background error.';
+    msg.className = 'tg-test-msg err';
+  }
+  setTimeout(() => { msg.textContent = 'Ready.'; msg.className = 'tg-test-msg'; }, 4000);
 });
 
 // Interval buttons

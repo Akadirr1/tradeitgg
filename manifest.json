@@ -35,7 +35,8 @@
     "tabs"
   ],
   "host_permissions": [
-    "*://tradeit.gg/*"
+    "*://tradeit.gg/*",
+    "https://api.telegram.org/*"
   ],
   "web_accessible_resources": [
     {

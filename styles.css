@@ -395,10 +395,81 @@
   border-color: var(--tt-accent);
 }
 
+/* ── Watch Button (in live table rows) ───────────────────── */
+.tt-watch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(232,184,75,0.06);
+  border: 1px solid rgba(232,184,75,0.2);
+  color: var(--tt-accent);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-family: var(--tt-font);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.tt-watch-btn:hover {
+  background: rgba(232,184,75,0.18);
+  border-color: var(--tt-accent);
+  transform: scale(1.08);
+}
+.tt-watch-btn:disabled {
+  cursor: default;
+  transform: none;
+}
+
 .tt-empty {
   padding: 32px 20px;
   text-align: center;
   color: var(--tt-muted);
   font-size: 12px;
   display: none;
+}
+
+/* ── Card hover "★ Watch" button (injected into site cards) ─ */
+.tt-card-watch-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 6px !important;
+  background: linear-gradient(135deg, rgba(232,184,75,0.85), rgba(212,160,51,0.9)) !important;
+  border: 1px solid rgba(232,184,75,0.6) !important;
+  color: #0d1117 !important;
+  font-size: 15px !important;
+  cursor: pointer !important;
+  transition: all 0.18s cubic-bezier(0.22,1,0.36,1) !important;
+  font-family: var(--tt-font) !important;
+  line-height: 1 !important;
+  flex-shrink: 0 !important;
+  margin-right: 4px !important;
+  box-shadow: 0 2px 8px rgba(232,184,75,0.3) !important;
+  position: relative !important;
+  z-index: 10 !important;
+  padding: 0 !important;
+}
+
+.tt-card-watch-btn:hover {
+  background: linear-gradient(135deg, #e8b84b, #d4a033) !important;
+  transform: scale(1.12) !important;
+  box-shadow: 0 4px 16px rgba(232,184,75,0.5) !important;
+}
+
+.tt-card-watch-btn:active {
+  transform: scale(0.96) !important;
+}
+
+.tt-card-watch-btn:disabled {
+  background: rgba(63,185,80,0.2) !important;
+  border-color: rgba(63,185,80,0.4) !important;
+  color: #3fb950 !important;
+  cursor: default !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
