@@ -15,8 +15,9 @@ const DEFAULT_SETTINGS = {
   soundNormal: true,
   soundWatchlist: true,
   popupEnabled: true,
-  watchlist: [],             // [{name, patterns, floatMin, floatMax}]
-  categoryMonitors: [],      // [{weapon, patterns, floatMin, floatMax}]
+  watchlist: [],             // [{name, patterns, floatMin, floatMax, minStickerValue}]
+  categoryMonitors: [],      // [{weapon, patterns, floatMin, floatMax, minStickerValue}]
+  stickerMonitors: [],       // [{name, minStickerValue}]
 };
 
 // ── State (in-memory, reset on SW restart) ────────────────
@@ -186,12 +187,40 @@ function normalizeItem(raw) {
     steamTags:    raw.steamTags ?? [],
     tradeUrl:     `https://tradeit.gg/csgo/store?search=${encodeURIComponent(raw.name ?? '')}`,
     timestamp:    Date.now(),
+    stickers:     raw.stickers ?? [],
   };
 }
 
+function calculateStickerValue(stickers) {
+  if (!stickers || stickers.length === 0) return 0;
+  let total = 0;
+  for (const s of stickers) {
+    total += s.price ?? 0;
+  }
+  return total;
+}
+
 function checkWatchlist(item, cfg) {
-  const watchlist       = cfg.watchlist       ?? [];
+  const watchlist        = cfg.watchlist        ?? [];
   const categoryMonitors = cfg.categoryMonitors ?? [];
+  const stickerMonitors  = cfg.stickerMonitors  ?? [];
+
+  const totalStickerValue = calculateStickerValue(item.stickers);
+
+  // Sticker monitors check
+  for (const entry of stickerMonitors) {
+    if (!entry.name) continue;
+    const entryName = entry.name.toLowerCase().trim();
+    const itemName  = item.name.toLowerCase();
+
+    if (!itemName.includes(entryName)) continue;
+    
+    // Convert USD to cents for comparison
+    const minCents = (parseFloat(entry.minStickerValue) || 0) * 100;
+    if (totalStickerValue >= minCents) {
+      return { type: 'sticker', entry };
+    }
+  }
 
   // Named watchlist check
   for (const entry of watchlist) {
@@ -200,8 +229,20 @@ function checkWatchlist(item, cfg) {
     const itemName  = item.name.toLowerCase();
 
     if (!itemName.includes(entryName)) continue;
-    if (!floatInRange(item.floatValue, entry.floatMin, entry.floatMax)) continue;
-    if (!patternMatches(item.patternIndex, entry.patterns)) continue;
+
+    if (entry.filterMode === 'pattern') {
+      // Pattern Only mode: pattern is required, float is ignored
+      if (!patternMatches(item.patternIndex, entry.patterns)) continue;
+    } else {
+      // Float Range mode: float check required, pattern is optional
+      if (!floatInRange(item.floatValue, entry.floatMin, entry.floatMax)) continue;
+      if (!patternMatches(item.patternIndex, entry.patterns)) continue;
+    }
+
+    if (entry.minStickerValue) {
+      const minCents = (parseFloat(entry.minStickerValue) || 0) * 100;
+      if (totalStickerValue < minCents) continue;
+    }
 
     return { type: 'named', entry };
   }
@@ -219,8 +260,20 @@ function checkWatchlist(item, cfg) {
       (weapon === 'all knives' && (tags.includes('knife') || itemName.includes('★')));
 
     if (!weaponMatch) continue;
-    if (!floatInRange(item.floatValue, cat.floatMin, cat.floatMax)) continue;
-    if (!patternMatches(item.patternIndex, cat.patterns)) continue;
+
+    if (cat.filterMode === 'pattern') {
+      // Pattern Only mode: pattern is required, float is ignored
+      if (!patternMatches(item.patternIndex, cat.patterns)) continue;
+    } else {
+      // Float Range mode
+      if (!floatInRange(item.floatValue, cat.floatMin, cat.floatMax)) continue;
+      if (!patternMatches(item.patternIndex, cat.patterns)) continue;
+    }
+
+    if (cat.minStickerValue) {
+      const minCents = (parseFloat(cat.minStickerValue) || 0) * 100;
+      if (totalStickerValue < minCents) continue;
+    }
 
     return { type: 'category', entry: cat };
   }
@@ -266,6 +319,7 @@ function recordMatch(item) {
     timestamp:    item.timestamp,
     matchType:    item.watchlistMatch?.type ?? 'named',
     matchedEntry: item.watchlistMatch?.entry?.name ?? item.watchlistMatch?.entry?.weapon ?? '',
+    totalStickerValue: calculateStickerValue(item.stickers),
   });
   if (recentMatches.length > 20) recentMatches = recentMatches.slice(0, 20);
 }
@@ -298,16 +352,20 @@ async function sendTelegramAlert(item, cfg) {
     const matchedBy = item.watchlistMatch?.entry?.name
                     ?? item.watchlistMatch?.entry?.weapon
                     ?? 'Watchlist';
+    
+    const totalStickerValue = calculateStickerValue(item.stickers);
+    const stickerStr = totalStickerValue > 0 ? `$${(totalStickerValue / 100).toFixed(2)}` : 'None';
 
     const lines = [
       '\u2605 <b>Watchlist Match!</b>',
       '',
       `\ud83d\udd2b <b>${item.name}</b>`,
       '',
-      `\ud83d\udcb0 Price:   <code>${price}</code>`,
-      `\ud83c\udf0a Float:   <code>${float_}</code>`,
-      `\ud83c\udfa8 Pattern: <code>${pattern}</code>`,
-      `\ud83d\udcc2 Match:   <code>${matchedBy}</code>`,
+      `\ud83d\udcb0 Price:    <code>${price}</code>`,
+      `\ud83c\udf0a Float:    <code>${float_}</code>`,
+      `\ud83c\udfa8 Pattern:  <code>${pattern}</code>`,
+      `\ud83c\udff7\ufe0f Stickers: <code>${stickerStr}</code>`,
+      `\ud83d\udcc2 Match:    <code>${matchedBy}</code>`,
       '',
       `\ud83d\udd17 <a href="${item.tradeUrl}">View on tradeit.gg</a>`,
     ];

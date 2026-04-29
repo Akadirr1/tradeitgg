@@ -554,6 +554,52 @@
       text-align: center;
     }
 
+    /* ── Filter Mode Selector ──────────────────────────────── */
+    .filter-mode-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .filter-mode-btn {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .filter-mode-btn:hover:not(.active) {
+      border-color: var(--muted);
+      color: var(--text);
+    }
+    .filter-mode-btn.active-float {
+      background: rgba(63,185,80,0.12);
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .filter-mode-btn.active-pattern {
+      background: rgba(232,184,75,0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .filter-mode-hint {
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      padding: 6px 8px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 5px;
+      border-left: 2px solid var(--border);
+      line-height: 1.5;
+    }
+
     /* ── Interval Selector ─────────────────────────────────── */
     .interval-group {
       display: flex;
@@ -635,6 +681,7 @@
   <div class="tabs">
     <button class="tab-btn active" id="tab-watchlist" data-tab="watchlist">⭐ Watchlist</button>
     <button class="tab-btn" id="tab-categories" data-tab="categories">📂 Categories</button>
+    <button class="tab-btn" id="tab-stickers" data-tab="stickers">🏷️ Stickers</button>
     <button class="tab-btn" id="tab-settings" data-tab="settings">⚙️ Settings</button>
     <button class="tab-btn" id="tab-log" data-tab="log">📋 Log</button>
   </div>
@@ -653,20 +700,43 @@
             <div class="skin-dropdown" id="wl-skin-dropdown"></div>
           </div>
         </div>
+
+        <div class="input-label" style="margin-bottom:6px">Filter Mode</div>
+        <div class="filter-mode-row">
+          <button class="filter-mode-btn active-float" id="wl-mode-float" data-mode="float">🌊 Float Range</button>
+          <button class="filter-mode-btn" id="wl-mode-pattern" data-mode="pattern">🎨 Pattern Only</button>
+        </div>
+        <div class="filter-mode-hint" id="wl-mode-hint">Float Range: Takip etmek istediğin aşınma aralığını gir. Pattern boş kalırsa tüm pattern'lar kabul edilir.</div>
+
+        <div id="wl-float-fields">
+          <div class="input-row">
+            <div class="input-group">
+              <div class="input-label">Float Min</div>
+              <input type="number" id="wl-float-min" placeholder="0.00" min="0" max="1" step="0.001" />
+            </div>
+            <div class="input-group">
+              <div class="input-label">Float Max</div>
+              <input type="number" id="wl-float-max" placeholder="1.00" min="0" max="1" step="0.001" />
+            </div>
+          </div>
+          <div class="input-group">
+            <div class="input-label">Pattern Filter <span style="color:var(--muted);font-weight:400">(opsiyonel)</span></div>
+            <input type="text" id="wl-patterns" placeholder='e.g. "387, 500-600"' />
+          </div>
+        </div>
+
+        <div id="wl-pattern-fields" style="display:none">
+          <div class="input-group">
+            <div class="input-label">Pattern <span style="color:var(--accent)">*</span></div>
+            <input type="text" id="wl-patterns-only" placeholder='e.g. "387" veya "1-100, 387, 500-600"' />
+          </div>
+        </div>
+
         <div class="input-group">
-          <div class="input-label">Pattern Filter</div>
-          <input type="text" id="wl-patterns" placeholder='e.g. "1-100, 387, 500-600"' />
+          <div class="input-label">Min Sticker Value ($) <span style="color:var(--muted);font-weight:400">(opsiyonel)</span></div>
+          <input type="number" id="wl-sticker-val" placeholder="e.g. 10.50" min="0" step="0.01" />
         </div>
-        <div class="input-row">
-          <div class="input-group">
-            <div class="input-label">Float Min</div>
-            <input type="number" id="wl-float-min" placeholder="0.00" min="0" max="1" step="0.001" />
-          </div>
-          <div class="input-group">
-            <div class="input-label">Float Max</div>
-            <input type="number" id="wl-float-max" placeholder="1.00" min="0" max="1" step="0.001" />
-          </div>
-        </div>
+
         <button class="btn btn-primary" id="wl-add-btn" style="width:100%">+ Add to Watchlist</button>
       </div>
     </div>
@@ -731,21 +801,73 @@
             </optgroup>
           </select>
         </div>
+
+        <div class="input-label" style="margin-bottom:6px">Filter Mode</div>
+        <div class="filter-mode-row">
+          <button class="filter-mode-btn active-float" id="cat-mode-float" data-mode="float">🌊 Float Range</button>
+          <button class="filter-mode-btn" id="cat-mode-pattern" data-mode="pattern">🎨 Pattern Only</button>
+        </div>
+        <div class="filter-mode-hint" id="cat-mode-hint">Float Range: Takip etmek istediğin aşınma aralığını gir. Pattern boş kalırsa tüm pattern'lar kabul edilir.</div>
+
+        <div id="cat-float-fields">
+          <div class="input-row">
+            <div class="input-group">
+              <div class="input-label">Float Min</div>
+              <input type="number" id="cat-float-min" placeholder="0.00" min="0" max="1" step="0.001" />
+            </div>
+            <div class="input-group">
+              <div class="input-label">Float Max</div>
+              <input type="number" id="cat-float-max" placeholder="1.00" min="0" max="1" step="0.001" />
+            </div>
+          </div>
+          <div class="input-group">
+            <div class="input-label">Pattern Filter <span style="color:var(--muted);font-weight:400">(opsiyonel)</span></div>
+            <input type="text" id="cat-patterns" placeholder='e.g. "387, 500-600"' />
+          </div>
+        </div>
+
+        <div id="cat-pattern-fields" style="display:none">
+          <div class="input-group">
+            <div class="input-label">Pattern <span style="color:var(--accent)">*</span></div>
+            <input type="text" id="cat-patterns-only" placeholder='e.g. "387" veya "1-100, 387, 500-600"' />
+          </div>
+        </div>
+
         <div class="input-group">
-          <div class="input-label">Pattern Filter</div>
-          <input type="text" id="cat-patterns" placeholder='e.g. "1-100, 387"' />
+          <div class="input-label">Min Sticker Value ($) <span style="color:var(--muted);font-weight:400">(opsiyonel)</span></div>
+          <input type="number" id="cat-sticker-val" placeholder="e.g. 5.00" min="0" step="0.01" />
         </div>
-        <div class="input-row">
-          <div class="input-group">
-            <div class="input-label">Float Min</div>
-            <input type="number" id="cat-float-min" placeholder="0.00" min="0" max="1" step="0.001" />
-          </div>
-          <div class="input-group">
-            <div class="input-label">Float Max</div>
-            <input type="number" id="cat-float-max" placeholder="1.00" min="0" max="1" step="0.001" />
-          </div>
-        </div>
+
         <button class="btn btn-primary" id="cat-add-btn" style="width:100%">+ Add Category Monitor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ TAB: STICKERS ══ -->
+  <div class="tab-content" id="content-stickers">
+    <div>
+      <div class="section-title">Standalone Sticker Monitors</div>
+      <div id="sticker-items"></div>
+      <div class="card">
+        <div class="input-group">
+          <div class="input-label">Skin Name — <span style="color:var(--accent);font-weight:400">type to search</span></div>
+          <div class="search-wrapper" id="st-search-wrapper">
+            <input type="text" id="st-name" placeholder='e.g. "AK-47 | Redline"' autocomplete="off" />
+            <div class="skin-search-spinner"></div>
+            <div class="skin-dropdown" id="st-skin-dropdown"></div>
+          </div>
+        </div>
+
+        <div class="filter-mode-hint">
+          Bu mod, skin'in herhangi bir pattern veya float durumunda çalışır. Sadece çıkartmalarının (stickers) toplam değeri belirlediğin tutarın üstünde ise bildirim alırsın.
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">Min Sticker Value ($) <span style="color:var(--accent)">*</span></div>
+          <input type="number" id="st-sticker-val" placeholder="e.g. 25.00" min="0" step="0.01" />
+        </div>
+
+        <button class="btn btn-primary" id="st-add-btn" style="width:100%">+ Add Sticker Monitor</button>
       </div>
     </div>
   </div>

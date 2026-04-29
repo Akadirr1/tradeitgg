@@ -26,18 +26,8 @@
   }
 
   async function playSound(type) {
-    try {
-      const { settings } = await chrome.storage.local.get('settings');
-      if (!settings) return;
-      ensureAudio();
-      if (type === 'watchlist' && settings.soundWatchlist) {
-        audioWatchlist.currentTime = 0;
-        audioWatchlist.play();
-      } else if (type === 'normal' && settings.soundNormal) {
-        audioNormal.currentTime = 0;
-        audioNormal.play();
-      }
-    } catch (_) {}
+    // Sound disabled as per user request
+    return;
   }
 
   // ── Toast / Overlay ───────────────────────────────────────
@@ -56,6 +46,14 @@
     const price = formatPrice(item.price);
     const float = item.floatValue !== null ? item.floatValue.toFixed(6) : 'N/A';
     const pattern = item.patternIndex !== null ? item.patternIndex : 'N/A';
+    
+    let stickerTotal = 0;
+    if (item.stickers) {
+      stickerTotal = item.stickers.reduce((acc, s) => acc + (s.price || 0), 0);
+    }
+    const stickerHtml = stickerTotal > 0 
+      ? `<span class="tt-detail"><span class="tt-label">Stickers</span><span class="tt-value" style="color:#e8b84b">$${(stickerTotal / 100).toFixed(2)}</span></span>`
+      : '';
 
     const toast = document.createElement('div');
     toast.className = `tt-toast ${isWatchlist ? 'tt-toast--watchlist' : 'tt-toast--normal'}`;
@@ -70,6 +68,7 @@
         <span class="tt-detail"><span class="tt-label">Price</span><span class="tt-value">${price}</span></span>
         <span class="tt-detail"><span class="tt-label">Float</span><span class="tt-value">${float}</span></span>
         <span class="tt-detail"><span class="tt-label">Pattern</span><span class="tt-value">${pattern}</span></span>
+        ${stickerHtml}
       </div>
       <a class="tt-toast-link" href="${item.tradeUrl}" target="_blank">View on tradeit.gg →</a>
     `;
@@ -205,10 +204,19 @@
         const price   = formatPrice(item.price);
         const float   = item.floatValue !== null ? item.floatValue.toFixed(4) : 'N/A';
         const pattern = item.patternIndex !== null ? item.patternIndex : 'N/A';
+        
+        let stickerTotal = 0;
+        if (item.stickers) {
+          stickerTotal = item.stickers.reduce((acc, s) => acc + (s.price || 0), 0);
+        }
+        const stickerBadge = stickerTotal > 0 
+          ? `<span style="background:rgba(232,184,75,0.15);color:#e8b84b;padding:1px 4px;border-radius:4px;font-size:9px;margin-left:6px;vertical-align:middle" title="Stickers Total Value">🏷️ $${(stickerTotal / 100).toFixed(2)}</span>`
+          : '';
+
         tr.innerHTML = `
           <td class="tt-cell-name">
             ${isWatchlist ? '<span class="tt-star">★</span>' : ''}
-            ${escapeHtml(item.name)}
+            ${escapeHtml(item.name)}${stickerBadge}
           </td>
           <td class="tt-cell-price">${price}</td>
           <td class="tt-cell-float">${float}</td>

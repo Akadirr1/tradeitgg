@@ -27,6 +27,7 @@ let settings = {
   popupEnabled: true,
   watchlist: [],
   categoryMonitors: [],
+  stickerMonitors: [],
   telegram: {
     enabled: false,
     token: '',
@@ -38,6 +39,7 @@ let settings = {
 async function init() {
   const data = await chrome.storage.local.get('settings');
   if (data.settings) settings = data.settings;
+  initModeToggleHandlers();
   renderAll();
   loadDebugInfo();
 }
@@ -45,6 +47,7 @@ async function init() {
 function renderAll() {
   renderWatchlist();
   renderCategories();
+  renderStickers();
   renderSettingsForm();
 }
 
@@ -74,15 +77,22 @@ function renderWatchlist() {
     const el = document.createElement('div');
     el.className = 'watchlist-item';
 
-    const floatStr = buildFloatStr(entry.floatMin, entry.floatMax);
-    const patStr   = entry.patterns?.trim() ? `Pattern: ${entry.patterns}` : '';
+    const isPatMode = entry.filterMode === 'pattern';
+    const floatStr  = isPatMode ? '' : buildFloatStr(entry.floatMin, entry.floatMax);
+    const patStr    = entry.patterns?.trim() ? entry.patterns : '';
+    const stickerStr = entry.minStickerValue ? `$${entry.minStickerValue}+` : '';
+    const modeBadge = isPatMode
+      ? `<span style="background:rgba(232,184,75,0.15);color:var(--accent);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700">PATTERN</span>`
+      : `<span style="background:rgba(63,185,80,0.12);color:var(--green);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700">FLOAT</span>`;
 
     el.innerHTML = `
       <div class="watchlist-item-info">
-        <div class="watchlist-item-name">★ ${escHtml(entry.name)}</div>
+        <div class="watchlist-item-name">★ ${escHtml(entry.name)} ${modeBadge}</div>
         <div class="watchlist-item-meta">
-          ${patStr   ? `<span><span class="meta-label">Pattern:</span><span class="meta-val">${escHtml(entry.patterns)}</span></span>` : ''}
+          ${patStr   ? `<span><span class="meta-label">Pattern:</span><span class="meta-val">${escHtml(patStr)}</span></span>` : ''}
           ${floatStr ? `<span><span class="meta-label">Float:</span><span class="meta-val">${floatStr}</span></span>` : ''}
+          ${stickerStr ? `<span><span class="meta-label">Stickers:</span><span class="meta-val">${stickerStr}</span></span>` : ''}
+          ${isPatMode && !patStr ? `<span style="color:var(--red);font-size:9px">⚠️ Pattern girilmemiş</span>` : ''}
         </div>
       </div>
       <button class="btn btn-danger btn-sm" data-idx="${idx}" data-type="wl">✕</button>
@@ -99,56 +109,102 @@ function renderWatchlist() {
   });
 }
 
+// ── Filter Mode State ──────────────────────────────────────
+let wlFilterMode  = 'float';   // 'float' | 'pattern'
+let catFilterMode = 'float';
+
+const WL_MODE_HINTS = {
+  float:   'Float Range: Takip etmek istediğin aşınma aralığını gir. Pattern boş kalırsa tüm pattern\'lar kabul edilir.',
+  pattern: 'Pattern Only: Girdiğin pattern numaralarına sahip skin, hangi aşınma durumunda olursa olsun takip edilir. Aramadan herhangi bir aşınmayı seçebilirsin — aşınma suffix\'i otomatik silinir.',
+};
+
+function applyWlMode(mode) {
+  wlFilterMode = mode;
+  const floatBtn    = document.getElementById('wl-mode-float');
+  const patBtn      = document.getElementById('wl-mode-pattern');
+  const floatFields = document.getElementById('wl-float-fields');
+  const patFields   = document.getElementById('wl-pattern-fields');
+  const hint        = document.getElementById('wl-mode-hint');
+  floatBtn.className = 'filter-mode-btn' + (mode === 'float' ? ' active-float' : '');
+  patBtn.className   = 'filter-mode-btn' + (mode === 'pattern' ? ' active-pattern' : '');
+  floatFields.style.display = mode === 'float'   ? '' : 'none';
+  patFields.style.display   = mode === 'pattern' ? '' : 'none';
+  if (hint) hint.textContent = WL_MODE_HINTS[mode];
+}
+
+function applyCatMode(mode) {
+  catFilterMode = mode;
+  const floatBtn    = document.getElementById('cat-mode-float');
+  const patBtn      = document.getElementById('cat-mode-pattern');
+  const floatFields = document.getElementById('cat-float-fields');
+  const patFields   = document.getElementById('cat-pattern-fields');
+  const hint        = document.getElementById('cat-mode-hint');
+  floatBtn.className = 'filter-mode-btn' + (mode === 'float' ? ' active-float' : '');
+  patBtn.className   = 'filter-mode-btn' + (mode === 'pattern' ? ' active-pattern' : '');
+  floatFields.style.display = mode === 'float'   ? '' : 'none';
+  patFields.style.display   = mode === 'pattern' ? '' : 'none';
+  if (hint) hint.textContent = WL_MODE_HINTS[mode];
+}
+
+function initModeToggleHandlers() {
+  document.getElementById('wl-mode-float').addEventListener('click',    () => applyWlMode('float'));
+  document.getElementById('wl-mode-pattern').addEventListener('click',  () => applyWlMode('pattern'));
+  document.getElementById('cat-mode-float').addEventListener('click',   () => applyCatMode('float'));
+  document.getElementById('cat-mode-pattern').addEventListener('click', () => applyCatMode('pattern'));
+}
+
 // ── Skin Search Autocomplete ───────────────────────────────
 let skinSearchTimer   = null;
 let selectedSkinName  = '';   // only set when user picks from dropdown
 let highlightedIdx    = -1;
 
-const wlNameInput  = document.getElementById('wl-name');
-const wlDropdown   = document.getElementById('wl-skin-dropdown');
-const wlWrapper    = document.getElementById('wl-search-wrapper');
+function setupAutocomplete(inputId, wrapperId, dropdownId) {
+  const nameInput  = document.getElementById(inputId);
+  const dropdown   = document.getElementById(dropdownId);
+  const wrapper    = document.getElementById(wrapperId);
 
-// Clear validated name whenever user types (forces re-selection)
-wlNameInput.addEventListener('input', () => {
-  selectedSkinName = '';
-  highlightedIdx = -1;
-  const q = wlNameInput.value.trim();
-  clearTimeout(skinSearchTimer);
-  if (q.length < 2) { closeDropdown(); return; }
-  skinSearchTimer = setTimeout(() => searchSkins(q), 350);
-});
+  nameInput.addEventListener('input', () => {
+    selectedSkinName = '';
+    highlightedIdx = -1;
+    const q = nameInput.value.trim();
+    clearTimeout(skinSearchTimer);
+    if (q.length < 2) { closeDropdown(dropdown); return; }
+    skinSearchTimer = setTimeout(() => searchSkins(q, wrapper, dropdown, nameInput), 350);
+  });
 
-// Keyboard navigation
-wlNameInput.addEventListener('keydown', (e) => {
-  const options = wlDropdown.querySelectorAll('.skin-option');
-  if (!options.length) return;
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    highlightedIdx = Math.min(highlightedIdx + 1, options.length - 1);
-    updateHighlight(options);
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    highlightedIdx = Math.max(highlightedIdx - 1, 0);
-    updateHighlight(options);
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    if (highlightedIdx >= 0 && options[highlightedIdx]) {
-      options[highlightedIdx].click();
+  nameInput.addEventListener('keydown', (e) => {
+    const options = dropdown.querySelectorAll('.skin-option');
+    if (!options.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      highlightedIdx = Math.min(highlightedIdx + 1, options.length - 1);
+      updateHighlight(options);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      highlightedIdx = Math.max(highlightedIdx - 1, 0);
+      updateHighlight(options);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIdx >= 0 && options[highlightedIdx]) {
+        options[highlightedIdx].click();
+      }
+    } else if (e.key === 'Escape') {
+      closeDropdown(dropdown);
     }
-  } else if (e.key === 'Escape') {
-    closeDropdown();
-  }
-});
+  });
 
-// Close dropdown when clicking outside
-document.addEventListener('mousedown', (e) => {
-  if (!wlWrapper.contains(e.target)) closeDropdown();
-});
+  document.addEventListener('mousedown', (e) => {
+    if (!wrapper.contains(e.target)) closeDropdown(dropdown);
+  });
+}
 
-async function searchSkins(query) {
-  wlWrapper.classList.add('loading');
-  wlDropdown.classList.add('open');
-  wlDropdown.innerHTML = '';
+setupAutocomplete('wl-name', 'wl-search-wrapper', 'wl-skin-dropdown');
+setupAutocomplete('st-name', 'st-search-wrapper', 'st-skin-dropdown');
+
+async function searchSkins(query, wrapper, dropdown, inputEl) {
+  wrapper.classList.add('loading');
+  dropdown.classList.add('open');
+  dropdown.innerHTML = '';
 
   try {
     const url = `https://tradeit.gg/api/v2/inventory/data?gameId=730&offset=0&limit=20&sortType=Popularity&searchValue=${encodeURIComponent(query)}`;
@@ -159,7 +215,6 @@ async function searchSkins(query) {
     const json = await res.json();
     const items = json?.items ?? json?.data ?? [];
 
-    // Deduplicate by name
     const seen = new Set();
     const unique = [];
     for (const it of items) {
@@ -168,7 +223,7 @@ async function searchSkins(query) {
     }
 
     if (unique.length === 0) {
-      wlDropdown.innerHTML = `<div class="skin-no-results">No skins found for "${escHtml(query)}"</div>`;
+      dropdown.innerHTML = `<div class="skin-no-results">No skins found for "${escHtml(query)}"</div>`;
     } else {
       highlightedIdx = -1;
       unique.forEach(item => {
@@ -180,28 +235,28 @@ async function searchSkins(query) {
           <span class="skin-option-name">${escHtml(item.name)}</span>
         `;
         div.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // prevent blur
-          selectSkin(item.name);
+          e.preventDefault();
+          selectSkin(item.name, inputEl, dropdown);
         });
-        wlDropdown.appendChild(div);
+        dropdown.appendChild(div);
       });
     }
   } catch (_) {
-    wlDropdown.innerHTML = `<div class="skin-no-results">Search failed. Try again.</div>`;
+    dropdown.innerHTML = `<div class="skin-no-results">Search failed. Try again.</div>`;
   } finally {
-    wlWrapper.classList.remove('loading');
+    wrapper.classList.remove('loading');
   }
 }
 
-function selectSkin(name) {
+function selectSkin(name, inputEl, dropdown) {
   selectedSkinName = name;
-  wlNameInput.value = name;
-  closeDropdown();
+  inputEl.value = name;
+  closeDropdown(dropdown);
 }
 
-function closeDropdown() {
-  wlDropdown.classList.remove('open');
-  wlDropdown.innerHTML = '';
+function closeDropdown(dropdown) {
+  dropdown.classList.remove('open');
+  dropdown.innerHTML = '';
   highlightedIdx = -1;
 }
 
@@ -212,17 +267,13 @@ function updateHighlight(options) {
 
 // ── Watchlist Add Button ────────────────────────────────────
 document.getElementById('wl-add-btn').addEventListener('click', () => {
-  const rawInput = wlNameInput.value.trim();
-  const patterns = document.getElementById('wl-patterns').value.trim();
-  const floatMin = document.getElementById('wl-float-min').value.trim();
-  const floatMax = document.getElementById('wl-float-max').value.trim();
+  const rawInput = document.getElementById('wl-name').value.trim();
 
   // Must have a name
   if (!rawInput) { shakeInput('wl-name'); return; }
 
   // Must be a confirmed skin from the dropdown
   if (!selectedSkinName || selectedSkinName !== rawInput) {
-    // Flash red to signal the user must pick from dropdown
     const el = document.getElementById('wl-name');
     el.style.borderColor = 'var(--red)';
     el.placeholder = 'Please select a skin from the search list ↑';
@@ -233,11 +284,29 @@ document.getElementById('wl-add-btn').addEventListener('click', () => {
     return;
   }
 
+  // Collect fields based on active mode
+  let patterns = '', floatMin = '', floatMax = '';
+  if (wlFilterMode === 'pattern') {
+    patterns = document.getElementById('wl-patterns-only').value.trim();
+    if (!patterns) { shakeInput('wl-patterns-only'); return; } // Pattern zorunlu
+  } else {
+    floatMin = document.getElementById('wl-float-min').value.trim();
+    floatMax = document.getElementById('wl-float-max').value.trim();
+    patterns = document.getElementById('wl-patterns').value.trim();
+  }
+  
+  const minStickerValue = document.getElementById('wl-sticker-val').value.trim();
+
+  // Pattern modunda aşınma suffix'ini temizle → tüm wear'ları kapsar
+  const nameToSave = wlFilterMode === 'pattern'
+    ? stripWear(selectedSkinName)
+    : selectedSkinName;
+
   if (!settings.watchlist) settings.watchlist = [];
 
-  // Prevent duplicate entries
+  // Prevent duplicate entries (compare stripped names)
   const alreadyExists = settings.watchlist.some(
-    e => e.name.toLowerCase() === selectedSkinName.toLowerCase()
+    e => stripWear(e.name).toLowerCase() === nameToSave.toLowerCase()
   );
   if (alreadyExists) {
     const el = document.getElementById('wl-name');
@@ -246,14 +315,15 @@ document.getElementById('wl-add-btn').addEventListener('click', () => {
     return;
   }
 
-  settings.watchlist.push({ name: selectedSkinName, patterns, floatMin, floatMax });
+  settings.watchlist.push({ name: nameToSave, patterns, floatMin, floatMax, filterMode: wlFilterMode, minStickerValue });
   selectedSkinName = '';
   saveSettings();
   renderWatchlist();
 
   // Clear inputs
-  ['wl-name', 'wl-patterns', 'wl-float-min', 'wl-float-max'].forEach(id => {
-    document.getElementById(id).value = '';
+  ['wl-name', 'wl-patterns', 'wl-patterns-only', 'wl-float-min', 'wl-float-max', 'wl-sticker-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
 });
 
@@ -273,14 +343,21 @@ function renderCategories() {
   settings.categoryMonitors.forEach((entry, idx) => {
     const el = document.createElement('div');
     el.className = 'watchlist-item';
-    const floatStr = buildFloatStr(entry.floatMin, entry.floatMax);
+    const isPatMode = entry.filterMode === 'pattern';
+    const floatStr  = isPatMode ? '' : buildFloatStr(entry.floatMin, entry.floatMax);
+    const patStr    = entry.patterns?.trim() ? entry.patterns : '';
+    const stickerStr = entry.minStickerValue ? `$${entry.minStickerValue}+` : '';
+    const modeBadge = isPatMode
+      ? `<span style="background:rgba(232,184,75,0.15);color:var(--accent);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700">PATTERN</span>`
+      : `<span style="background:rgba(63,185,80,0.12);color:var(--green);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700">FLOAT</span>`;
 
     el.innerHTML = `
       <div class="watchlist-item-info">
-        <div class="watchlist-item-name">📂 ${escHtml(entry.weapon)}</div>
+        <div class="watchlist-item-name">📂 ${escHtml(entry.weapon)} ${modeBadge}</div>
         <div class="watchlist-item-meta">
-          ${entry.patterns?.trim() ? `<span><span class="meta-label">Pattern:</span><span class="meta-val">${escHtml(entry.patterns)}</span></span>` : ''}
+          ${patStr   ? `<span><span class="meta-label">Pattern:</span><span class="meta-val">${escHtml(patStr)}</span></span>` : ''}
           ${floatStr ? `<span><span class="meta-label">Float:</span><span class="meta-val">${floatStr}</span></span>` : ''}
+          ${stickerStr ? `<span><span class="meta-label">Stickers:</span><span class="meta-val">${stickerStr}</span></span>` : ''}
         </div>
       </div>
       <button class="btn btn-danger btn-sm" data-idx="${idx}" data-type="cat">✕</button>
@@ -298,21 +375,110 @@ function renderCategories() {
 }
 
 document.getElementById('cat-add-btn').addEventListener('click', () => {
-  const weapon   = document.getElementById('cat-weapon').value;
-  const patterns = document.getElementById('cat-patterns').value.trim();
-  const floatMin = document.getElementById('cat-float-min').value.trim();
-  const floatMax = document.getElementById('cat-float-max').value.trim();
-
+  const weapon = document.getElementById('cat-weapon').value;
   if (!weapon) { shakeInput('cat-weapon'); return; }
 
+  let patterns = '', floatMin = '', floatMax = '';
+  if (catFilterMode === 'pattern') {
+    patterns = document.getElementById('cat-patterns-only').value.trim();
+    if (!patterns) { shakeInput('cat-patterns-only'); return; }
+  } else {
+    floatMin = document.getElementById('cat-float-min').value.trim();
+    floatMax = document.getElementById('cat-float-max').value.trim();
+    patterns = document.getElementById('cat-patterns').value.trim();
+  }
+
+  const minStickerValue = document.getElementById('cat-sticker-val').value.trim();
+
   if (!settings.categoryMonitors) settings.categoryMonitors = [];
-  settings.categoryMonitors.push({ weapon, patterns, floatMin, floatMax });
+  settings.categoryMonitors.push({ weapon, patterns, floatMin, floatMax, filterMode: catFilterMode, minStickerValue });
   saveSettings();
   renderCategories();
 
   document.getElementById('cat-weapon').value = '';
-  ['cat-patterns', 'cat-float-min', 'cat-float-max'].forEach(id => {
-    document.getElementById(id).value = '';
+  ['cat-patterns', 'cat-patterns-only', 'cat-float-min', 'cat-float-max', 'cat-sticker-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+// STICKERS TAB
+// ══════════════════════════════════════════════════════════
+function renderStickers() {
+  const container = document.getElementById('sticker-items');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!settings.stickerMonitors || settings.stickerMonitors.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏷️</div>No sticker monitors yet.</div>`;
+    return;
+  }
+
+  settings.stickerMonitors.forEach((entry, idx) => {
+    const el = document.createElement('div');
+    el.className = 'watchlist-item';
+    el.innerHTML = `
+      <div class="watchlist-item-info">
+        <div class="watchlist-item-name">🏷️ ${escHtml(entry.name)}</div>
+        <div class="watchlist-item-meta">
+          <span><span class="meta-label">Min Sticker Value:</span><span class="meta-val">$${escHtml(entry.minStickerValue)}</span></span>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" data-idx="${idx}" data-type="st">✕</button>
+    `;
+    container.appendChild(el);
+  });
+
+  container.querySelectorAll('[data-type="st"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      settings.stickerMonitors.splice(Number(btn.dataset.idx), 1);
+      saveSettings();
+      renderStickers();
+    });
+  });
+}
+
+document.getElementById('st-add-btn').addEventListener('click', () => {
+  const rawInput = document.getElementById('st-name').value.trim();
+  const minStickerValue = document.getElementById('st-sticker-val').value.trim();
+
+  if (!rawInput) { shakeInput('st-name'); return; }
+  if (!minStickerValue) { shakeInput('st-sticker-val'); return; }
+
+  if (!selectedSkinName || selectedSkinName !== rawInput) {
+    const el = document.getElementById('st-name');
+    el.style.borderColor = 'var(--red)';
+    el.placeholder = 'Please select a skin from the search list ↑';
+    setTimeout(() => {
+      el.style.borderColor = '';
+      el.placeholder = 'e.g. "AK-47 | Redline"';
+    }, 1800);
+    return;
+  }
+
+  const nameToSave = stripWear(selectedSkinName);
+
+  if (!settings.stickerMonitors) settings.stickerMonitors = [];
+  
+  const alreadyExists = settings.stickerMonitors.some(
+    e => stripWear(e.name).toLowerCase() === nameToSave.toLowerCase()
+  );
+  if (alreadyExists) {
+    const el = document.getElementById('st-name');
+    el.style.borderColor = 'var(--accent)';
+    setTimeout(() => el.style.borderColor = '', 1200);
+    return;
+  }
+
+  settings.stickerMonitors.push({ name: nameToSave, minStickerValue });
+  selectedSkinName = '';
+  saveSettings();
+  renderStickers();
+
+  ['st-name', 'st-sticker-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
 });
 
@@ -505,6 +671,7 @@ async function loadMatchLog() {
           <span class="match-price">${price}</span>
           <span>Float: ${float}</span>
           <span>Pat: ${pattern}</span>
+          ${m.totalStickerValue > 0 ? `<span style="color:var(--accent)">Stickers: $${(m.totalStickerValue / 100).toFixed(2)}</span>` : ''}
           <span class="match-time">${when}</span>
         </div>
       </div>
@@ -514,6 +681,26 @@ async function loadMatchLog() {
 }
 
 // ── Helpers ────────────────────────────────────────────────
+
+/**
+ * CS2 aşınma suffix'lerini skin adından siler.
+ * "AK-47 | Redline (Minimal Wear)" → "AK-47 | Redline"
+ * Pattern modunda kaydederken kullanılır: tüm aşınma durumları kapsanır.
+ */
+const WEAR_SUFFIXES = [
+  '(Factory New)', '(Minimal Wear)', '(Field-Tested)', '(Well-Worn)', '(Battle-Scarred)',
+];
+function stripWear(name) {
+  let result = name;
+  for (const suffix of WEAR_SUFFIXES) {
+    if (result.endsWith(suffix)) {
+      result = result.slice(0, -suffix.length).trimEnd();
+      break;
+    }
+  }
+  return result;
+}
+
 function buildFloatStr(min, max) {
   if ((!min || min === '') && (!max || max === '')) return '';
   const lo = min || '0';
