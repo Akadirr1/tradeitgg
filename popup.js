@@ -35,8 +35,86 @@ let settings = {
   },
 };
 
+// ── Activation State ─────────────────────────────────────────
+let activationState = { isActive: false, apiKey: '', deviceId: '' };
+const BACKEND_URL = 'http://localhost:3000'; // Default to localhost
+
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+async function checkActivation() {
+  const data = await chrome.storage.local.get('activationState');
+  if (data.activationState) {
+    activationState = data.activationState;
+  }
+  
+  if (!activationState.deviceId) {
+    activationState.deviceId = generateUUID();
+    await chrome.storage.local.set({ activationState });
+  }
+
+  const screen = document.getElementById('activation-screen');
+  if (activationState.isActive) {
+    screen.style.display = 'none';
+  } else {
+    screen.style.display = 'flex';
+  }
+}
+
+document.getElementById('activate-btn').addEventListener('click', async () => {
+  const apiKey = document.getElementById('api-key-input').value.trim();
+  const errorEl = document.getElementById('activation-error');
+  const btn = document.getElementById('activate-btn');
+  
+  if (!apiKey) {
+    errorEl.textContent = 'API Anahtarı boş olamaz.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  btn.textContent = 'Doğrulanıyor...';
+  btn.disabled = true;
+  errorEl.style.display = 'none';
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, deviceId: activationState.deviceId })
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok && data.success) {
+      activationState.isActive = true;
+      activationState.apiKey = apiKey;
+      await chrome.storage.local.set({ activationState });
+      document.getElementById('activation-screen').style.display = 'none';
+      // Signal background to start polling if it was waiting
+      chrome.runtime.sendMessage({ type: 'ACTIVATION_SUCCESS' });
+    } else {
+      errorEl.textContent = data.error || 'Doğrulama başarısız.';
+      errorEl.style.display = 'block';
+    }
+  } catch (err) {
+    errorEl.textContent = 'Sunucuya bağlanılamadı. Lütfen internetinizi kontrol edin.';
+    errorEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Aktifleştir';
+    btn.disabled = false;
+  }
+});
+
 // ── Initialize ─────────────────────────────────────────────
 async function init() {
+  await checkActivation();
   const data = await chrome.storage.local.get('settings');
   if (data.settings) settings = data.settings;
   initModeToggleHandlers();

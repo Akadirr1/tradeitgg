@@ -36,7 +36,9 @@
   ],
   "host_permissions": [
     "*://tradeit.gg/*",
-    "https://api.telegram.org/*"
+    "https://api.telegram.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "web_accessible_resources": [
     {

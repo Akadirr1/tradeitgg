@@ -69,8 +69,14 @@ async function pollMarket() {
   }
 
   try {
-    const { settings } = await chrome.storage.local.get('settings');
-    const cfg = settings ?? DEFAULT_SETTINGS;
+    const data = await chrome.storage.local.get(['settings', 'activationState']);
+    const cfg = data.settings ?? DEFAULT_SETTINGS;
+    const activationState = data.activationState;
+
+    if (!activationState || !activationState.isActive) {
+      console.log('[TradeIt Tracker] Not activated. Skipping poll.');
+      return;
+    }
 
     const url = `${API_BASE}?gameId=${GAME_ID}&offset=0&limit=40&sortType=Newest`;
     const response = await fetch(url, {
@@ -445,6 +451,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ ok: false, error: err.message });
       }
     });
+    return true;
+  }
+
+  if (msg.type === 'ACTIVATION_SUCCESS') {
+    pollMarket().catch(() => {});
+    sendResponse({ ok: true });
     return true;
   }
 });
