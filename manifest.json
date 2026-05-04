@@ -38,7 +38,9 @@
     "*://tradeit.gg/*",
     "https://api.telegram.org/*",
     "http://localhost/*",
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "ws://localhost:8000/*",
+    "ws://127.0.0.1:8000/*"
   ],
   "web_accessible_resources": [
     {

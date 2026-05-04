@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+Scrapling/
+scraper/.venv/
+scraper/__pycache__/
+scraper/*.db
+scraper/*.db-wal
+scraper/*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,6 +1,7 @@
 // ============================================================
 // background.js — Service Worker for TradeIt Tracker
 // Handles polling, watchlist matching, and messaging to content.js
+// Now with Scrapling WebSocket backend support + API fallback
 // ============================================================
 
 const API_BASE = 'https://tradeit.gg/api/v2/inventory/data';
@@ -8,6 +9,14 @@ const GAME_ID  = 730; // CS2
 
 // Item type codes from tradeit.gg metaMappings.type
 const EXCLUDED_TYPES = new Set([15, 25, 1, 4]); // Stickers, Agents, Cases, Graffiti
+
+// ── Scrapling Backend ─────────────────────────────────────
+const SCRAPER_WS_URL = 'ws://127.0.0.1:8000/ws';
+const SCRAPER_API_URL = 'http://127.0.0.1:8000/api';
+let ws = null;
+let wsConnected = false;
+let wsReconnectTimer = null;
+const WS_RECONNECT_DELAY = 5000;   // 5s between reconnect attempts
 
 // ── Default settings ──────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -27,6 +36,140 @@ let isInitialized = false;
 let recentMatches = [];      // cap at 20
 
 // ============================================================
+// Scrapling WebSocket connection
+// ============================================================
+function connectWebSocket() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  try {
+    ws = new WebSocket(SCRAPER_WS_URL);
+
+    ws.onopen = () => {
+      wsConnected = true;
+      console.log('[TradeIt Tracker] 🔗 Connected to Scrapling backend');
+      // Sync config to backend
+      syncConfigToBackend();
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleScraperMessage(msg);
+      } catch (e) {
+        console.warn('[TradeIt Tracker] Bad WS message:', e);
+      }
+    };
+
+    ws.onclose = () => {
+      wsConnected = false;
+      ws = null;
+      console.log('[TradeIt Tracker] WebSocket disconnected — falling back to API');
+      // Schedule reconnect
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = setTimeout(connectWebSocket, WS_RECONNECT_DELAY);
+    };
+
+    ws.onerror = (err) => {
+      console.warn('[TradeIt Tracker] WebSocket error:', err.message || 'connection failed');
+    };
+  } catch (e) {
+    console.warn('[TradeIt Tracker] WebSocket creation failed:', e);
+    wsConnected = false;
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = setTimeout(connectWebSocket, WS_RECONNECT_DELAY);
+  }
+}
+
+async function syncConfigToBackend() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  try {
+    const { settings } = await chrome.storage.local.get('settings');
+    const cfg = settings ?? DEFAULT_SETTINGS;
+    ws.send(JSON.stringify({
+      type: 'CONFIG_UPDATE',
+      config: {
+        polling_interval: cfg.pollingInterval ?? 15,
+        watchlist: (cfg.watchlist ?? []).map(w => ({
+          name: w.name,
+          patterns: w.patterns || '',
+          float_min: w.floatMin ? parseFloat(w.floatMin) : null,
+          float_max: w.floatMax ? parseFloat(w.floatMax) : null,
+          filter_mode: w.filterMode || 'float',
+          min_sticker_value: w.minStickerValue ? parseFloat(w.minStickerValue) : null,
+        })),
+        category_monitors: cfg.categoryMonitors ?? [],
+        sticker_monitors: cfg.stickerMonitors ?? [],
+      }
+    }));
+  } catch (e) {
+    console.warn('[TradeIt Tracker] Failed to sync config:', e);
+  }
+}
+
+async function handleScraperMessage(msg) {
+  const type = msg.type;
+
+  if (type === 'CONNECTED') {
+    console.log('[TradeIt Tracker] Backend status:', msg.status);
+    return;
+  }
+
+  if (type === 'NEW_ITEMS') {
+    // Items from the Scrapling backend — richer data than API
+    const items = msg.items ?? [];
+    if (items.length === 0) return;
+
+    const { settings } = await chrome.storage.local.get('settings');
+    const cfg = settings ?? DEFAULT_SETTINGS;
+
+    const newItems = [];
+    for (const raw of items) {
+      const id = String(raw.id ?? raw.assetId ?? '');
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+      const item = normalizeItem(raw);
+      item._source = msg.meta?.source ?? 'scraper';
+      newItems.push(item);
+    }
+
+    if (newItems.length === 0) return;
+
+    // Classify
+    const watchlistMatches = [];
+    const regularItems = [];
+    for (const item of newItems) {
+      const match = checkWatchlist(item, cfg);
+      if (match) {
+        item.watchlistMatch = match;
+        watchlistMatches.push(item);
+        recordMatch(item);
+      } else {
+        regularItems.push(item);
+      }
+    }
+
+    await chrome.storage.local.set({ recentMatches });
+
+    if (watchlistMatches.length > 0) {
+      for (const item of watchlistMatches) {
+        await sendTelegramAlert(item, cfg);
+      }
+    }
+
+    await notifyTabs({ watchlistMatches, regularItems, settings: cfg });
+    console.log(`[TradeIt Tracker] Scraper: ${newItems.length} new (${watchlistMatches.length} matches) via ${msg.meta?.source ?? 'scraper'}`);
+    return;
+  }
+
+  if (type === 'PONG' || type === 'CONFIG_ACK' || type === 'STATUS') {
+    // Acknowledged — no action needed
+    return;
+  }
+}
+
+// ============================================================
 // Alarm setup
 // ============================================================
 chrome.runtime.onInstalled.addListener(async () => {
@@ -35,16 +178,28 @@ chrome.runtime.onInstalled.addListener(async () => {
     await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
   }
   await setupAlarm();
+  connectWebSocket();
   console.log('[TradeIt Tracker] Extension installed / updated.');
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await setupAlarm();
+  connectWebSocket();
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'poll') {
-    await pollMarket();
+    // Only poll API if scraper backend is NOT connected
+    if (!wsConnected) {
+      await pollMarket();
+    } else {
+      // Ping the backend to keep connection alive
+      try {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'PING' }));
+        }
+      } catch (_) {}
+    }
   }
 });
 
@@ -414,12 +569,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'SETTINGS_UPDATED') {
     // Re-setup alarm with new interval
     setupAlarm();
+    // Sync updated config to Scrapling backend
+    syncConfigToBackend();
     sendResponse({ ok: true });
     return true;
   }
 
   if (msg.type === 'POLL_NOW') {
-    pollMarket().then(() => sendResponse({ ok: true }));
+    if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+      // Ask Scrapling backend to scrape now
+      ws.send(JSON.stringify({ type: 'SCRAPE_NOW', useBrowser: false }));
+      sendResponse({ ok: true, source: 'scraper' });
+    } else {
+      pollMarket().then(() => sendResponse({ ok: true, source: 'api' }));
+    }
     return true;
   }
 
@@ -429,6 +592,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       seenCount: seenIds.size,
       backoffDelay,
       matchCount: recentMatches.length,
+      scraperConnected: wsConnected,
+      source: wsConnected ? 'scraper' : 'api',
     });
     return true;
   }
@@ -455,8 +620,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === 'ACTIVATION_SUCCESS') {
+    connectWebSocket();
     pollMarket().catch(() => {});
     sendResponse({ ok: true });
+    return true;
+  }
+
+  if (msg.type === 'SCRAPER_SCRAPE_NOW') {
+    // Force browser-based scrape via Scrapling backend
+    if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'SCRAPE_NOW', useBrowser: true }));
+      sendResponse({ ok: true });
+    } else {
+      sendResponse({ ok: false, error: 'Scraper not connected' });
+    }
     return true;
   }
 });

@@ -701,13 +701,30 @@ document.getElementById('status-pill').addEventListener('click', () => {
 async function loadDebugInfo() {
   try {
     const status = await chrome.runtime.sendMessage({ type: 'GET_STATUS' });
+    const scraperBadge = status.scraperConnected
+      ? '<span style="background:rgba(63,185,80,0.15);color:var(--green);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">🔗 SCRAPER</span>'
+      : '<span style="background:rgba(248,81,73,0.12);color:var(--red);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">📡 API</span>';
+
     document.getElementById('debug-info').innerHTML = `
       Initialized: ${status.isInitialized ? '✅ Yes' : '⏳ No'}<br>
       Items seen: ${status.seenCount}<br>
       Backoff delay: ${status.backoffDelay}s<br>
       Recent matches: ${status.matchCount}<br>
-      Polling every: ${settings.pollingInterval}s
+      Polling every: ${settings.pollingInterval}s<br>
+      Data source: ${scraperBadge}
     `;
+
+    // Update status pill to reflect source
+    const statusText = document.getElementById('status-text');
+    const statusDot = document.getElementById('status-dot');
+    if (status.scraperConnected) {
+      statusText.textContent = 'Scraper';
+      statusDot.style.background = 'var(--green)';
+    } else {
+      statusText.textContent = 'API';
+      statusDot.style.background = 'var(--accent)';
+    }
+
     document.getElementById('footer-stat').textContent =
       `${status.seenCount} items tracked`;
   } catch (_) {
